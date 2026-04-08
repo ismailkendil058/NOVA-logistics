@@ -9,6 +9,7 @@ import {
   Invoice, InvoiceItem, Supplier, Product,
   formatDZD, generateId, updateProductStock
 } from "@/lib/store";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 type View = "list" | "add" | "return";
 
@@ -33,6 +34,7 @@ export default function FacturesPage() {
   // Return form state
   const [returnInvoiceId, setReturnInvoiceId] = useState("");
   const [returnItems, setReturnItems] = useState<{ idx: number; quantity: number }[]>([]);
+  const isMobile = useIsMobile();
 
   const filtered = useMemo(() => {
     return invoices.filter(inv => {
@@ -156,6 +158,165 @@ export default function FacturesPage() {
 
   // ─── ADD FACTURE VIEW ────────────────────────────────────────────────────────
   if (view === "add") {
+    if (isMobile) {
+      return (
+        <div className="min-h-screen bg-[#eef5f4] px-4 pb-6 pt-5 text-gray-800">
+          <div className="mx-auto max-w-md space-y-5">
+            <div className="rounded-[2rem] bg-[#243740] px-5 py-5 text-white shadow-[0_18px_40px_rgba(36,55,64,0.18)]">
+              <button
+                onClick={() => { resetAddForm(); setView("list"); }}
+                className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-white"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">Factures</p>
+              <h2 className="mt-3 text-3xl font-black tracking-tight">Nouvel achat</h2>
+              <p className="mt-1 text-sm text-white/70">Créez une facture fournisseur pensée pour le mobile.</p>
+            </div>
+
+            <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
+              <div className="flex rounded-2xl bg-[#eef5f4] p-1">
+                <button
+                  onClick={() => setIsNewSupplier(false)}
+                  className={`flex-1 rounded-2xl px-3 py-2 text-sm font-bold ${!isNewSupplier ? "bg-white text-[#243740] shadow-sm" : "text-gray-500"}`}
+                >
+                  Existant
+                </button>
+                <button
+                  onClick={() => setIsNewSupplier(true)}
+                  className={`flex-1 rounded-2xl px-3 py-2 text-sm font-bold ${isNewSupplier ? "bg-white text-[#243740] shadow-sm" : "text-gray-500"}`}
+                >
+                  Nouveau
+                </button>
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {isNewSupplier ? (
+                  <>
+                    <Input placeholder="Nom du fournisseur" value={newSupplier.name} onChange={e => setNewSupplier(p => ({ ...p, name: e.target.value }))} className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]" />
+                    <Input placeholder="Téléphone" value={newSupplier.phone} onChange={e => setNewSupplier(p => ({ ...p, phone: e.target.value }))} className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]" />
+                    <Input placeholder="Adresse" value={newSupplier.address} onChange={e => setNewSupplier(p => ({ ...p, address: e.target.value }))} className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]" />
+                  </>
+                ) : (
+                  <Select value={supplierId} onValueChange={setSupplierId}>
+                    <SelectTrigger className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa] text-sm">
+                      <SelectValue placeholder="Choisir un fournisseur..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]" />
+              </div>
+            </div>
+
+            <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-black text-[#243740]">Produits</p>
+                  <p className="text-xs text-gray-400">{invoiceItems.length} ligne{invoiceItems.length > 1 ? "s" : ""}</p>
+                </div>
+                <Button onClick={addInvoiceItem} variant="outline" className="h-10 rounded-2xl border-[#41b86d]/20 text-[#41b86d] hover:bg-[#41b86d]/5">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Ajouter
+                </Button>
+              </div>
+
+              <div className="mt-4 space-y-4">
+                {invoiceItems.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[#c9dcda] px-4 py-10 text-center text-sm text-gray-400">
+                    Aucun produit ajouté.
+                  </div>
+                ) : (
+                  invoiceItems.map((item, idx) => (
+                    <div key={idx} className="rounded-[1.5rem] border border-gray-100 bg-[#f7fbfa] p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-black text-[#243740]">Produit #{idx + 1}</p>
+                        <button
+                          onClick={() => removeInvoiceItem(idx)}
+                          className="flex h-9 w-9 items-center justify-center rounded-2xl bg-white text-gray-400"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      <div className="mt-3 flex rounded-2xl bg-white p-1">
+                        <button
+                          onClick={() => { const u = [...invoiceItems]; u[idx].isNew = false; setInvoiceItems(u); }}
+                          className={`flex-1 rounded-2xl px-3 py-2 text-xs font-bold ${!item.isNew ? "bg-[#41b86d] text-white" : "text-gray-500"}`}
+                        >
+                          Existant
+                        </button>
+                        <button
+                          onClick={() => { const u = [...invoiceItems]; u[idx].isNew = true; setInvoiceItems(u); }}
+                          className={`flex-1 rounded-2xl px-3 py-2 text-xs font-bold ${item.isNew ? "bg-[#41b86d] text-white" : "text-gray-500"}`}
+                        >
+                          Nouveau
+                        </button>
+                      </div>
+
+                      <div className="mt-3 space-y-3">
+                        {item.isNew ? (
+                          <>
+                            <Input placeholder="Nom du produit" value={item.newName} onChange={e => { const u = [...invoiceItems]; u[idx].newName = e.target.value; setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
+                            <Select value={item.newCategory} onValueChange={v => { const u = [...invoiceItems]; u[idx].newCategory = v; setInvoiceItems(u); }}>
+                              <SelectTrigger className="h-12 rounded-2xl border-gray-200 bg-white text-sm">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="satine">Satiné</SelectItem>
+                                <SelectItem value="enduit">Enduit</SelectItem>
+                                <SelectItem value="vinyle">Vinyle</SelectItem>
+                                <SelectItem value="decor">Décor</SelectItem>
+                                <SelectItem value="fixateur">Fixateur</SelectItem>
+                                <SelectItem value="accessoires">Accessoires</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </>
+                        ) : (
+                          <Select value={item.productId} onValueChange={v => { const u = [...invoiceItems]; u[idx].productId = v; setInvoiceItems(u); }}>
+                            <SelectTrigger className="h-12 rounded-2xl border-gray-200 bg-white text-sm">
+                              <SelectValue placeholder="Choisir un produit..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        <div className="grid grid-cols-2 gap-3">
+                          <Input type="number" placeholder="Quantité" value={item.quantity || ""} onChange={e => { const u = [...invoiceItems]; u[idx].quantity = Number(e.target.value); setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
+                          <Input type="number" placeholder="Prix achat" value={item.priceBuy || ""} onChange={e => { const u = [...invoiceItems]; u[idx].priceBuy = Number(e.target.value); setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
+                          <Input type="number" placeholder="Prix vente" value={item.priceSale || ""} onChange={e => { const u = [...invoiceItems]; u[idx].priceSale = Number(e.target.value); setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
+                          <Input type="date" value={item.expiryDate || ""} onChange={e => { const u = [...invoiceItems]; u[idx].expiryDate = e.target.value; setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[1.75rem] bg-[#243740] px-5 py-4 text-white shadow-[0_18px_40px_rgba(36,55,64,0.14)]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/50">Total facture</p>
+                  <p className="mt-1 text-2xl font-black">{formatDZD(invoiceTotal)}</p>
+                </div>
+                <Button
+                  onClick={handleSubmitInvoice}
+                  disabled={invoiceItems.length === 0}
+                  className="h-12 rounded-2xl bg-[#41b86d] px-5 font-bold text-white hover:bg-[#39a05f]"
+                >
+                  Valider
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-[#f4f8f8] font-sans text-gray-800 animate-fade-in">
         {/* Header */}
@@ -389,6 +550,94 @@ export default function FacturesPage() {
 
   // ─── RETOUR DE FACTURE VIEW ──────────────────────────────────────────────────
   if (view === "return") {
+    if (isMobile) {
+      return (
+        <div className="min-h-screen bg-[#eef5f4] px-4 pb-6 pt-5 text-gray-800">
+          <div className="mx-auto max-w-md space-y-5">
+            <div className="rounded-[2rem] bg-[#243740] px-5 py-5 text-white shadow-[0_18px_40px_rgba(36,55,64,0.18)]">
+              <button
+                onClick={() => { setReturnInvoiceId(""); setReturnItems([]); setView("list"); }}
+                className="mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-white"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">Retours</p>
+              <h2 className="mt-3 text-3xl font-black tracking-tight">Retour facture</h2>
+              <p className="mt-1 text-sm text-white/70">Sélectionnez une facture et les quantités à retirer.</p>
+            </div>
+
+            <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
+              <p className="text-sm font-black text-[#243740]">Facture d'origine</p>
+              <Select value={returnInvoiceId} onValueChange={v => { setReturnInvoiceId(v); setReturnItems([]); }}>
+                <SelectTrigger className="mt-3 h-12 rounded-2xl border-gray-200 bg-[#f7fbfa] text-sm">
+                  <SelectValue placeholder="Choisir une facture..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {invoices.filter(i => i.type === "achat").map(i => (
+                    <SelectItem key={i.id} value={i.id}>
+                      {i.number} - {i.supplier.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {selectedReturnInvoice && (
+              <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
+                <p className="text-sm font-black text-[#243740]">Produits à retourner</p>
+                <div className="mt-4 space-y-3">
+                  {selectedReturnInvoice.items.map((item, idx) => {
+                    const currentQty = returnItems.find(r => r.idx === idx)?.quantity || 0;
+                    return (
+                      <div key={idx} className="rounded-[1.5rem] border border-gray-100 bg-[#f7fbfa] p-4">
+                        <p className="text-sm font-bold text-[#243740]">{item.product.name}</p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Acheté: {item.quantity} • {formatDZD(item.priceBuy)} / unité
+                        </p>
+                        <Input
+                          type="number"
+                          className="mt-3 h-12 rounded-2xl border-gray-200 bg-white text-center font-bold"
+                          min={0}
+                          max={item.quantity}
+                          value={currentQty || ""}
+                          placeholder="Qté retour"
+                          onChange={e => {
+                            const qty = Math.min(Number(e.target.value), item.quantity);
+                            setReturnItems(prev => {
+                              const existing = prev.find(r => r.idx === idx);
+                              if (qty === 0) return prev.filter(r => r.idx !== idx);
+                              if (existing) return prev.map(r => r.idx === idx ? { ...r, quantity: qty } : r);
+                              return [...prev, { idx, quantity: qty }];
+                            });
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-[1.75rem] bg-[#5f1f2f] px-5 py-4 text-white shadow-[0_18px_40px_rgba(95,31,47,0.16)]">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/50">Montant retour</p>
+                  <p className="mt-1 text-2xl font-black">{formatDZD(returnTotal)}</p>
+                </div>
+                <Button
+                  onClick={handleReturn}
+                  disabled={returnItems.length === 0}
+                  className="h-12 rounded-2xl bg-red-500 px-5 font-bold text-white hover:bg-red-600"
+                >
+                  Valider
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-[#f4f8f8] font-sans text-gray-800 animate-fade-in">
         {/* Header */}
@@ -522,6 +771,137 @@ export default function FacturesPage() {
   }
 
   // ─── LIST VIEW ───────────────────────────────────────────────────────────────
+  if (isMobile) {
+    return (
+      <div className="min-h-screen bg-[#eef5f4] px-4 pb-6 pt-5 text-gray-800">
+        <div className="mx-auto max-w-md space-y-5">
+          <div className="rounded-[2rem] bg-[#243740] px-5 py-5 text-white shadow-[0_18px_40px_rgba(36,55,64,0.18)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">Factures</p>
+            <div className="mt-3 flex items-end justify-between gap-4">
+              <div>
+                <h2 className="text-3xl font-black tracking-tight">Flux achats</h2>
+                <p className="mt-1 text-sm text-white/70">{invoices.length} facture{invoices.length !== 1 ? "s" : ""} au total</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 px-3 py-2 text-right">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-white/50">Retour</p>
+                <p className="text-lg font-black">{invoices.filter(invoice => invoice.type === "retour").length}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Button onClick={() => setView("add")} className="h-12 rounded-[1.5rem] bg-[#41b86d] font-bold text-white hover:bg-[#39a05f]">
+              <Plus className="mr-2 h-4 w-4" />
+              Ajouter
+            </Button>
+            <Button variant="outline" onClick={() => setView("return")} className="h-12 rounded-[1.5rem] border-red-200 text-red-500 hover:bg-red-50">
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Retour
+            </Button>
+          </div>
+
+          <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                placeholder="Rechercher une facture..."
+                className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa] pl-11 text-sm font-medium shadow-none focus-visible:ring-0"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <Input
+              type="date"
+              className="mt-3 h-12 rounded-2xl border-gray-200 bg-[#f7fbfa] font-medium shadow-none focus-visible:ring-0"
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-3">
+            {filtered.length === 0 ? (
+              <div className="rounded-[1.75rem] border border-dashed border-[#c9dcda] bg-white px-4 py-10 text-center text-sm font-medium text-gray-400">
+                Aucune facture trouvée.
+              </div>
+            ) : (
+              filtered.map(inv => (
+                <article key={inv.id} className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[#628b9a]">{inv.number}</p>
+                      <p className="mt-2 text-lg font-black leading-tight text-[#243740]">{inv.supplier.name}</p>
+                      <p className="mt-1 text-sm text-gray-500">{new Date(inv.date).toLocaleDateString("fr-FR")}</p>
+                    </div>
+                    <span className={`rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] ${inv.type === "retour" ? "bg-red-100 text-red-500" : "bg-[#eef5f4] text-[#628b9a]"}`}>
+                      {inv.type === "retour" ? "Retour" : "Achat"}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between rounded-2xl bg-[#f7fbfa] px-3 py-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Total</p>
+                      <p className="text-base font-black text-[#41b86d]">{formatDZD(inv.total)}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="h-11 rounded-2xl border-[#41b86d]/20 text-[#41b86d] hover:bg-[#41b86d]/5"
+                      onClick={() => setSelectedInvoice(inv)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      Détail
+                    </Button>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </div>
+
+        <Dialog open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
+          <DialogContent className="max-h-[85vh] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-[1.75rem] border-0 bg-white shadow-xl sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="border-b border-gray-100 pb-4 text-xl font-bold tracking-tight">
+                Facture <span className="ml-2 text-lg font-mono text-gray-400">{selectedInvoice?.number}</span>
+              </DialogTitle>
+            </DialogHeader>
+            {selectedInvoice && (
+              <div className="space-y-5 pt-2">
+                <div className="grid grid-cols-1 gap-3 rounded-2xl bg-gray-50 p-4 text-sm font-medium">
+                  <div>
+                    <span className="mb-1 block text-[10px] uppercase tracking-widest text-gray-400">Fournisseur</span>
+                    <span className="font-bold">{selectedInvoice.supplier.name}</span>
+                  </div>
+                  <div>
+                    <span className="mb-1 block text-[10px] uppercase tracking-widest text-gray-400">Date</span>
+                    {new Date(selectedInvoice.date).toLocaleDateString("fr-FR")}
+                  </div>
+                  <div>
+                    <span className="mb-1 block text-[10px] uppercase tracking-widest text-gray-400">Type</span>
+                    <span className={`rounded px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${selectedInvoice.type === "retour" ? "bg-red-100 text-red-600" : "bg-[#628b9a]/10 text-[#628b9a]"}`}>
+                      {selectedInvoice.type === "retour" ? "Retour" : "Achat"}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-2 px-1">
+                  {selectedInvoice.items.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between rounded-2xl border border-gray-50 bg-white p-3">
+                      <span className="text-sm font-bold text-gray-700">{item.product.name} <span className="ml-1 font-medium text-gray-400">× {item.quantity}</span></span>
+                      <span className="font-bold text-gray-600">{formatDZD(item.priceBuy * item.quantity)}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-100 pt-4 text-xl font-black">
+                  <span className="text-gray-800">Total</span>
+                  <span className="text-[#41b86d]">{formatDZD(selectedInvoice.total)}</span>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 animate-fade-in bg-[#f4f8f8] min-h-screen font-sans text-gray-800">
       <div className="flex items-center justify-between mb-8">

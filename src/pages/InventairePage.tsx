@@ -2,11 +2,13 @@ import { useState, useMemo } from "react";
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { getProducts, formatDZD, CATEGORIES } from "@/lib/store";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 export default function InventairePage() {
   const [products] = useState(getProducts);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("");
+  const isMobile = useIsMobile();
 
   const filtered = useMemo(() => {
     return products.filter(p => {
@@ -15,6 +17,106 @@ export default function InventairePage() {
       return matchSearch && matchCat;
     });
   }, [products, search, catFilter]);
+
+  if (isMobile) {
+    return (
+      <div className="min-h-screen bg-[#eef5f4] px-4 pb-6 pt-5 text-gray-800">
+        <div className="mx-auto max-w-md space-y-5">
+          <div className="rounded-[2rem] bg-[#243740] px-5 py-5 text-white shadow-[0_18px_40px_rgba(36,55,64,0.18)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">Inventaire</p>
+            <div className="mt-3 flex items-end justify-between gap-4">
+              <div>
+                <h2 className="text-3xl font-black tracking-tight">Stock mobile</h2>
+                <p className="mt-1 text-sm text-white/70">{filtered.length} produit{filtered.length !== 1 ? "s" : ""} visible{filtered.length !== 1 ? "s" : ""}</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 px-3 py-2 text-right">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-white/50">Alertes</p>
+                <p className="text-lg font-black">{filtered.filter(product => product.stock <= 5).length}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                placeholder="Rechercher un produit..."
+                className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa] pl-11 text-sm font-medium shadow-none focus-visible:ring-0"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+
+            <div className="mobile-scroll-x mt-4 flex gap-2 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={() => setCatFilter("")}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold transition-colors ${!catFilter ? "bg-[#41b86d] text-white" : "bg-[#eef5f4] text-[#3f5362]"}`}
+              >
+                Toutes
+              </button>
+              {CATEGORIES.map(category => (
+                <button
+                  key={category.key}
+                  type="button"
+                  onClick={() => setCatFilter(category.key)}
+                  className={`whitespace-nowrap rounded-full px-4 py-2 text-xs font-bold transition-colors ${catFilter === category.key ? "bg-[#243740] text-white" : "bg-[#eef5f4] text-[#3f5362]"}`}
+                >
+                  {category.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {filtered.length === 0 ? (
+              <div className="rounded-[1.75rem] border border-dashed border-[#c9dcda] bg-white px-4 py-10 text-center text-sm font-medium text-gray-400">
+                Aucun produit ne correspond aux filtres.
+              </div>
+            ) : (
+              filtered.map(product => {
+                const category = CATEGORIES.find(item => item.key === product.category);
+                return (
+                  <article key={product.id} className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-base font-black leading-tight text-[#243740]">{product.name}</p>
+                        <div className="mt-2 inline-flex rounded-full bg-[#eef5f4] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#628b9a]">
+                          {category?.label}
+                        </div>
+                      </div>
+                      <div className={`rounded-2xl px-3 py-2 text-center ${product.stock <= 5 ? "bg-red-50 text-red-500" : "bg-[#ecf8f0] text-[#41b86d]"}`}>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Stock</p>
+                        <p className="text-lg font-black">{product.stock}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-2xl bg-[#f7fbfa] px-3 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Prix vente</p>
+                        <p className="mt-1 text-sm font-black text-[#41b86d]">{formatDZD(product.priceSale)}</p>
+                      </div>
+                      <div className="rounded-2xl bg-[#f7fbfa] px-3 py-3">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Unité</p>
+                        <p className="mt-1 text-sm font-black text-[#243740]">{product.unit}</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 rounded-2xl bg-[#f7fbfa] px-3 py-3">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Péremption</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-600">
+                        {product.expiryDate ? new Date(product.expiryDate).toLocaleDateString("fr-FR") : "Aucune date"}
+                      </p>
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 animate-fade-in bg-[#f4f8f8] min-h-screen font-sans text-gray-800">

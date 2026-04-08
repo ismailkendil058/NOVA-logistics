@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getBons, Bon, formatDZD, updateBon, CartItem, getProducts, updateProductStock } from "@/lib/store";
+import { useIsMobile } from "@/hooks/useIsMobile";
 
 export default function BonsPage() {
   const [bons, setBons] = useState(getBons);
@@ -18,6 +19,7 @@ export default function BonsPage() {
   const [newProductQty, setNewProductQty] = useState("");
   const [editReduction, setEditReduction] = useState("");
   const products = getProducts();
+  const isMobile = useIsMobile();
 
   const filtered = useMemo(() => {
     return bons.filter(b => {
@@ -152,6 +154,274 @@ export default function BonsPage() {
   const handleReductionChange = (value: string) => {
     setEditReduction(value);
   };
+
+  if (isMobile) {
+    return (
+      <div className="min-h-screen bg-[#eef5f4] px-4 pb-6 pt-5 text-gray-800">
+        <div className="mx-auto max-w-md space-y-5">
+          <div className="rounded-[2rem] bg-[#243740] px-5 py-5 text-white shadow-[0_18px_40px_rgba(36,55,64,0.18)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">Bons de Vente</p>
+            <div className="mt-3 flex items-end justify-between gap-4">
+              <div>
+                <h2 className="text-3xl font-black tracking-tight">Suivi clients</h2>
+                <p className="mt-1 text-sm text-white/70">{filtered.length} bon{filtered.length > 1 ? "s" : ""} affiché{filtered.length > 1 ? "s" : ""}</p>
+              </div>
+              <div className="rounded-2xl bg-white/10 px-3 py-2 text-right">
+                <p className="text-[10px] uppercase tracking-[0.24em] text-white/50">Total</p>
+                <p className="text-lg font-black">{formatDZD(filtered.reduce((sum, bon) => sum + bon.total, 0))}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                placeholder="Rechercher un client ou un bon..."
+                className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa] pl-11 text-sm font-medium shadow-none focus-visible:ring-0"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <Input
+              type="date"
+              className="mt-3 h-12 rounded-2xl border-gray-200 bg-[#f7fbfa] font-medium shadow-none focus-visible:ring-0"
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-3">
+            {filtered.length === 0 ? (
+              <div className="rounded-[1.75rem] border border-dashed border-[#c9dcda] bg-white px-4 py-10 text-center text-sm font-medium text-gray-400">
+                Aucun bon trouvé.
+              </div>
+            ) : (
+              filtered.map(bon => (
+                <article key={bon.id} className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[#628b9a]">{bon.number}</p>
+                      <p className="mt-2 text-lg font-black leading-tight text-[#243740]">{bon.clientName}</p>
+                      <p className="mt-1 text-sm text-gray-500">{bon.clientPhone}</p>
+                    </div>
+                    <div className="rounded-2xl bg-[#ecf8f0] px-3 py-2 text-right text-[#41b86d]">
+                      <p className="text-[10px] font-bold uppercase tracking-[0.18em]">Total</p>
+                      <p className="text-base font-black">{formatDZD(bon.total)}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between rounded-2xl bg-[#f7fbfa] px-3 py-3 text-sm text-gray-600">
+                    <span>{new Date(bon.date).toLocaleDateString("fr-FR")}</span>
+                    <span className="font-semibold">{bon.items.length} article{bon.items.length > 1 ? "s" : ""}</span>
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <Button
+                      variant="outline"
+                      className="h-11 rounded-2xl border-[#41b86d]/20 text-[#41b86d] hover:bg-[#41b86d]/5"
+                      onClick={() => setSelectedBon(bon)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      Voir
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="h-11 rounded-2xl border-[#628b9a]/20 text-[#628b9a] hover:bg-[#628b9a]/5"
+                      onClick={() => openEditBon(bon)}
+                    >
+                      <Edit3 className="mr-2 h-4 w-4" />
+                      Modifier
+                    </Button>
+                  </div>
+                </article>
+              ))
+            )}
+          </div>
+        </div>
+
+        <Dialog open={!!selectedBon} onOpenChange={() => setSelectedBon(null)}>
+          <DialogContent className="max-h-[85vh] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-[1.75rem] border-0 bg-white shadow-xl sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="border-b border-gray-100 pb-4 text-xl font-bold tracking-tight">
+                Détail du Bon <span className="ml-2 text-lg font-mono text-gray-400">{selectedBon?.number}</span>
+              </DialogTitle>
+            </DialogHeader>
+            {selectedBon && (
+              <div className="space-y-6 pt-2">
+                <div className="grid grid-cols-1 gap-3 rounded-2xl bg-gray-50 p-4 text-sm font-medium">
+                  <div>
+                    <span className="mb-1 block text-[10px] uppercase tracking-widest text-gray-400">Client</span>
+                    <span className="font-bold">{selectedBon.clientName}</span>
+                  </div>
+                  <div>
+                    <span className="mb-1 block text-[10px] uppercase tracking-widest text-gray-400">Téléphone</span>
+                    {selectedBon.clientPhone}
+                  </div>
+                  <div>
+                    <span className="mb-1 block text-[10px] uppercase tracking-widest text-gray-400">Date</span>
+                    {new Date(selectedBon.date).toLocaleDateString("fr-FR")}
+                  </div>
+                </div>
+                <div className="space-y-3 px-1">
+                  {selectedBon.items.map((item, i) => (
+                    <div key={i} className="rounded-2xl border border-gray-100 bg-white p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-sm font-bold text-gray-700">
+                          {item.product.name} <span className="ml-2 font-medium text-gray-400">× {item.quantity}</span>
+                        </span>
+                        <span className="font-bold text-gray-600">{formatDZD(item.subtotal)}</span>
+                      </div>
+                    </div>
+                  ))}
+                  {selectedBon.teinteAmount > 0 && (
+                    <div className="space-y-2 px-2 pt-1">
+                      <div className="flex justify-between text-sm font-bold text-[#41b86d]">
+                        <span>La Teinte</span>
+                        <span>+{formatDZD(selectedBon.teinteAmount)}</span>
+                      </div>
+                    </div>
+                  )}
+                  {selectedBon.reduction > 0 && (
+                    <div className="flex justify-between px-2 pt-1 text-sm font-bold text-red-500">
+                      <span>Réduction</span>
+                      <span>-{formatDZD(selectedBon.reduction)}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between border-t border-gray-100 pt-4 text-xl font-black">
+                  <span className="text-gray-800">Total</span>
+                  <span className="text-[#39a05f]">{formatDZD(selectedBon.total)}</span>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!editingBon} onOpenChange={open => { if (!open) closeEditBon(); }}>
+          <DialogContent className="max-h-[85vh] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-[1.75rem] border-0 bg-white shadow-xl sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="border-b border-gray-100 pb-4 text-xl font-bold tracking-tight">
+                Modifier le bon <span className="ml-2 text-lg font-mono text-gray-400">{editingBon?.number}</span>
+              </DialogTitle>
+            </DialogHeader>
+            {editingBon && (
+              <div className="space-y-4 pt-2">
+                <div className="space-y-1">
+                  <p className="text-[11px] uppercase tracking-widest text-gray-500">Client</p>
+                  <Input value={editClientName} onChange={e => handleClientNameChange(e.target.value)} placeholder="Nom complet" className="h-11 border-gray-200" />
+                </div>
+                <div className="space-y-1">
+                  <p className="text-[11px] uppercase tracking-widest text-gray-500">Téléphone</p>
+                  <Input value={editClientPhone} onChange={e => handleClientPhoneChange(e.target.value)} placeholder="Numéro de téléphone" className="h-11 border-gray-200" />
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] uppercase tracking-widest text-gray-500">Articles</p>
+                    <span className="text-xs font-semibold text-gray-400">{editingItems.length} article(s)</span>
+                  </div>
+                  {editingItems.length === 0 ? (
+                    <p className="text-xs text-gray-400">Ajoutez des articles pour modifier le bon.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {editingItems.map(item => {
+                        const unitPrice = item.customUnitPrice ?? item.product.priceSale;
+                        return (
+                          <div key={item.product.id} className="rounded-2xl border border-gray-100 bg-gray-50 p-3 text-xs">
+                            <p className="font-semibold text-gray-700">{item.product.name}</p>
+                            <p className="mt-1 text-[11px] text-gray-500">{formatDZD(unitPrice)} / unité</p>
+                            <div className="mt-3 flex items-center gap-2">
+                              <Input
+                                type="number"
+                                min={1}
+                                className="h-10 text-sm"
+                                value={item.quantity}
+                                onChange={e => handleEditItemQuantity(item.product.id, Number(e.target.value))}
+                              />
+                              <p className="min-w-20 text-right font-bold text-gray-700">{formatDZD(item.subtotal)}</p>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-10 w-10 text-gray-400 hover:bg-red-100 hover:text-red-500"
+                                onClick={() => removeEditingItem(item.product.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2 pt-1">
+                  <p className="text-[11px] uppercase tracking-widest text-gray-500">Ajouter un produit</p>
+                  <select
+                    className="h-11 w-full rounded-2xl border border-gray-200 bg-white px-3 text-sm"
+                    value={newProductId}
+                    onChange={e => setNewProductId(e.target.value)}
+                  >
+                    <option value="">Sélectionner un produit</option>
+                    {selectedProductsForAdd.map(product => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} — {formatDZD(product.priceSale)}
+                      </option>
+                    ))}
+                  </select>
+                  <Input
+                    type="number"
+                    min={1}
+                    placeholder="Quantité"
+                    className="h-11 rounded-2xl text-sm"
+                    value={newProductQty}
+                    onChange={e => setNewProductQty(e.target.value)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-11 w-full rounded-2xl text-sm font-semibold"
+                    onClick={handleAddProduct}
+                    disabled={!newProductId || Number(newProductQty) <= 0}
+                  >
+                    Ajouter à la liste
+                  </Button>
+                  <div className="flex justify-between text-sm font-bold text-gray-600">
+                    <span>Montant articles</span>
+                    <span>{formatDZD(editingItemsSubtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-500">
+                    <span>Teinte</span>
+                    <span>{formatDZD(editingBonTeinte)}</span>
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-[11px] uppercase tracking-widest text-gray-500">Réduction (DZD)</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={editReduction}
+                      onChange={e => handleReductionChange(e.target.value)}
+                      className="h-10 rounded-2xl border border-gray-200 text-sm"
+                    />
+                  </div>
+                  <div className="flex justify-between text-lg font-black text-[#41b86d]">
+                    <span>Total modifié</span>
+                    <span>{formatDZD(editingTotal)}</span>
+                  </div>
+                </div>
+                <Button
+                  disabled={!canSaveEdit}
+                  onClick={handleEditSave}
+                  className="mt-1 h-11 w-full bg-[#41b86d] font-bold text-white hover:bg-[#378f63]"
+                >
+                  Enregistrer les modifications
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
 
   return (
     <div className="p-8 animate-fade-in bg-[#f4f8f8] min-h-screen font-sans text-gray-800">
