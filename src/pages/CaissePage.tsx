@@ -1,11 +1,12 @@
-import { useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { Search, Plus, Minus, Trash2, Paintbrush, Percent, PaintBucket, Hammer, Pipette, Frame, SprayCan, Wrench, Package } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   getProducts, CartItem, Product, CategoryType, CATEGORIES,
-  formatDZD, generateId, addSale, addBon, updateProductStock, TeinteEntry
+  formatDZD, generateId, addSale, addBon, updateProductStock, TeinteEntry,
+  getCustomCards, saveCustomCards, CustomSaleCard
 } from "@/lib/store";
 
 const categoryIcons: Record<CategoryType, React.ElementType> = {
@@ -26,14 +27,16 @@ const categoryColors: Record<CategoryType, string> = {
   accessoires: "bg-[#e6a861] hover:bg-[#d69851] text-white",
 };
 
+const customizableCategories = new Set<CategoryType>(["satine", "vinyle", "enduit", "fixateur"]);
+
 type TempTeinteEntry = { unitPrice: string; kg: string };
 const createTempTeinteEntry = (): TempTeinteEntry => ({ unitPrice: "", kg: "" });
 
 export default function CaissePage() {
-  const [products] = useState(getProducts());
+  const [products, setProducts] = useState(getProducts());
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState<CategoryType | null>(null);
+  const [activeCategory, setActiveCategory] = useState<CategoryType | null>("satine");
   const [teinteEntries, setTeinteEntries] = useState<TeinteEntry[]>([]);
   const [reduction, setReduction] = useState(0);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -49,34 +52,166 @@ export default function CaissePage() {
     const kg = Number(entry.kg) || 0;
     return sum + unitPrice * kg;
   }, 0);
+  const [customCards, setCustomCards] = useState<CustomSaleCard[]>(() => getCustomCards());
+  const [showCustomModal, setShowCustomModal] = useState(false);
+  const [customModalProduct, setCustomModalProduct] = useState<Product | null>(null);
+  const [customModalKg, setCustomModalKg] = useState("");
+  const [customModalUnitPrice, setCustomModalUnitPrice] = useState("");
+  const [activeCustomCard, setActiveCustomCard] = useState<CustomSaleCard | null>(null);
+  const [customCardKg, setCustomCardKg] = useState("");
+  const previewCustomTotal = (Number(customModalKg) || 0) * (Number(customModalUnitPrice) || 0);
+  const previewCustomCardTotal = activeCustomCard ? (Number(customCardKg) || 0) * activeCustomCard.unitPrice : 0;
+  const remainingCustomKg = activeCustomCard?.kg ?? 0;
+  const getCustomCardPendingKg = useCallback((cardId: string) => {
+    return cart.reduce((sum, item) => {
+      if (item.customCardId !== cardId) return sum;
+      return sum + (item.weightKg ?? item.quantity);
+    }, 0);
+  }, [cart]);
+  const visibleCustomCards = useMemo(() => {
+    const filtered = activeCategory ? customCards.filter(card => card.category === activeCategory) : customCards;
+    return filtered.filter(card => card.kg - getCustomCardPendingKg(card.id) > 0);
+  }, [customCards, activeCategory, getCustomCardPendingKg]);
   const sectionOptions = [
     { id: "products", label: "Produits" },
     { id: "cart", label: "Panier" },
   ] as const;
   const hasValidTempTeinteEntry = tempTeinteEntries.some(entry => (Number(entry.unitPrice) || 0) > 0 && (Number(entry.kg) || 0) > 0);
+  useEffect(() => {
+    saveCustomCards(customCards);
+  }, [customCards]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleInventoryUpdated = () => setProducts(getProducts());
+    window.addEventListener("novaInventoryUpdated", handleInventoryUpdated);
+    return () => window.removeEventListener("novaInventoryUpdated", handleInventoryUpdated);
+  }, []);
+
+  const openCustomModal = (product: Product) => {
+    if (product.stock <= 0) return;
+    setCustomModalProduct(product);
+    setCustomModalKg("");
+    setCustomModalUnitPrice("");
+    setShowCustomModal(true);
+  };
+
+  const closeCustomModal = () => {
+    setShowCustomModal(false);
+    setCustomModalProduct(null);
+    setCustomModalKg("");
+    setCustomModalUnitPrice("");
+  };
+
+  const addCustomCartItem = (baseProduct: Product, kg: number, unitPrice: number, customCardId?: string) => {
+    const customProduct: Product = {
+      ...baseProduct,
+      id: `${baseProduct.id}-custom-${Date.now()}`,
+      name: `${baseProduct.name} (${kg} kg)`,
+      priceSale: unitPrice,
+    };
+
+    const newItem: CartItem = {
+      product: customProduct,
+      quantity: kg,
+      subtotal: kg * unitPrice,
+      weightKg: kg,
+      customUnitPrice: unitPrice,
+      customBaseProductId: baseProduct.id,
+      customCardId,
+    };
+
+    setCart(prev => [...prev, newItem]);
+  };
+
+  const addCustomCardEntry = (baseProduct: Product, kg: number, unitPrice: number) => {
+    const card: CustomSaleCard = {
+      id: `${baseProduct.id}-custom-card-${Date.now()}`,
+      baseProductId: baseProduct.id,
+      baseProductName: baseProduct.name,
+      category: baseProduct.category,
+      kg,
+      unitPrice,
+    };
+    setCustomCards(prev => [...prev, card]);
+  };
+
+  const handleCustomSaleConfirm = () => {
+    if (!customModalProduct) return;
+    const kg = Number(customModalKg);
+    const unitPrice = Number(customModalUnitPrice);
+    if (!kg || !unitPrice) return;
+
+    addCustomCartItem(customModalProduct, kg, unitPrice);
+    addCustomCardEntry(customModalProduct, kg, unitPrice);
+    closeCustomModal();
+  };
+
+  const canUseCustomCard = (card: CustomSaleCard) => {
+    const product = products.find(p => p.id === card.baseProductId);
+    const available = card.kg - getCustomCardPendingKg(card.id);
+    return !!product && product.stock > 0 && available > 0;
+  };
+
+  const handleCustomCardAdd = (card: CustomSaleCard, kgOverride?: number) => {
+    const kg = kgOverride ?? card.kg;
+    if (kg <= 0 || kg > card.kg) return;
+    const baseProduct = products.find(p => p.id === card.baseProductId);
+    if (!baseProduct || baseProduct.stock <= 0) return;
+    const pending = getCustomCardPendingKg(card.id);
+    if (kg > card.kg - pending) return;
+    addCustomCartItem(baseProduct, kg, card.unitPrice, card.id);
+    setActiveCustomCard(prev => {
+      if (!prev || prev.id !== card.id) return prev;
+      const remaining = Math.max(0, prev.kg - kg);
+      return remaining > 0 ? { ...prev, kg: remaining } : null;
+    });
+  };
+
+  const openCustomCardModal = (card: CustomSaleCard) => {
+    if (!canUseCustomCard(card)) return;
+    setActiveCustomCard(card);
+    setCustomCardKg("");
+  };
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
       const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
-      const matchCat = !activeCategory || p.category === activeCategory;
+      const matchCat = !search && activeCategory ? p.category === activeCategory : true;
       return matchSearch && matchCat;
     });
   }, [products, search, activeCategory]);
 
+  const normalProductCartQty = (productId: string) => {
+    return cart.reduce((sum, item) => {
+      if (item.product.id !== productId || item.customUnitPrice) return sum;
+      return sum + item.quantity;
+    }, 0);
+  };
+
   const addToCart = useCallback((product: Product) => {
+    const qtyInCart = normalProductCartQty(product.id);
+    if (product.stock <= qtyInCart) return;
     setCart(prev => {
-      const existing = prev.find(c => c.product.id === product.id);
+      const existing = prev.find(c => c.product.id === product.id && !c.customUnitPrice);
       if (existing) {
-        return prev.map(c => c.product.id === product.id
+        return prev.map(c => c.product.id === product.id && !c.customUnitPrice
           ? { ...c, quantity: c.quantity + 1, subtotal: (c.quantity + 1) * product.priceSale }
           : c
         );
       }
       return [...prev, { product, quantity: 1, subtotal: product.priceSale }];
     });
-  }, []);
+  }, [cart]);
 
   const updateQty = (id: string, delta: number) => {
+    const targetProduct = products.find(p => p.id === id);
+    if (!targetProduct) return;
+    if (delta > 0) {
+      const qtyInCart = normalProductCartQty(id);
+      if (qtyInCart >= targetProduct.stock) return;
+    }
+
     setCart(prev => prev.map(c => {
       if (c.product.id !== id) return c;
       const newQty = Math.max(0, c.quantity + delta);
@@ -90,16 +225,39 @@ export default function CaissePage() {
   const teinteAmount = teinteEntries.reduce((s, entry) => s + entry.unitPrice * entry.kg, 0);
   const total = subtotal + teinteAmount - reduction;
 
+  const applyCustomCardUsage = () => {
+    const usage: Record<string, number> = {};
+    cart.forEach(item => {
+      if (!item.customCardId) return;
+      usage[item.customCardId] = (usage[item.customCardId] || 0) + (item.weightKg ?? item.quantity);
+    });
+    if (!Object.keys(usage).length) return;
+    setCustomCards(prev => {
+      return prev.reduce<CustomSaleCard[]>((acc, card) => {
+        const used = usage[card.id] ?? 0;
+        const remaining = Math.max(0, card.kg - used);
+        if (remaining > 0) {
+          return [...acc, { ...card, kg: remaining }];
+        }
+        return acc;
+      }, []);
+    });
+  };
+
   const handleCheckout = (type: 'direct' | 'bon') => {
     const saleId = generateId();
-    cart.forEach(item => updateProductStock(item.product.id, -item.quantity));
+    cart.forEach(item => {
+      const productId = item.customBaseProductId ?? item.product.id;
+      updateProductStock(productId, -item.quantity);
+    });
+    applyCustomCardUsage();
 
     if (type === 'direct') {
       addSale({ id: saleId, type: 'direct', items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
     } else {
       const bonId = generateId();
       const bonNumber = `BON-${Date.now().toString().slice(-6)}`;
-      addBon({ id: bonId, number: bonNumber, clientName, clientPhone, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString(), status: 'en_cours' });
+      addBon({ id: bonId, number: bonNumber, clientName, clientPhone, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
       addSale({ id: saleId, type: 'bon', bonId, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
     }
 
@@ -109,6 +267,7 @@ export default function CaissePage() {
     setReduction(0);
     setClientName("");
     setClientPhone("");
+    setProducts(getProducts());
     setShowCheckout(false);
   };
 
@@ -157,29 +316,64 @@ export default function CaissePage() {
 
         {/* Product Grid */}
         <div className="flex-1 overflow-auto rounded-lg mb-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 p-1">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 p-1">
             {filteredProducts.map(product => {
               const Icon = categoryIcons[product.category] || Package;
+              const showCustom = customizableCategories.has(product.category);
               return (
-                <button
+                <div
                   key={product.id}
                   onClick={() => addToCart(product)}
-                  className="bg-white border border-gray-100 rounded-lg p-3 text-left hover:border-gray-300 hover:shadow-md transition-all duration-200 group relative flex flex-col min-h-[140px] items-center justify-between"
+                className="bg-white border border-gray-100 rounded-lg p-3 text-left hover:border-gray-300 hover:shadow-md transition-all duration-200 group relative flex flex-col min-h-[175px] items-center justify-between cursor-pointer"
                 >
                   <span className="absolute top-2 right-2 text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
                     {product.stock}
                   </span>
-                  <div className="flex-1 flex items-center justify-center pt-3 pb-1 w-full">
+                  {showCustom && (
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); openCustomModal(product); }}
+                      className="absolute left-2 top-2 h-8 w-8 rounded-full bg-[#41b86d] text-white flex items-center justify-center shadow-md transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#41b86d]"
+                      disabled={product.stock <= 0}
+                    >
+                      <Plus className="h-4 w-4" strokeWidth={2} />
+                    </button>
+                  )}
+                  <div className="flex-1 flex items-center justify-center pt-3 pb-1 w-full pointer-events-none">
                     <Icon className="h-10 w-10 text-gray-400 group-hover:text-gray-600 group-hover:scale-110 transition-all drop-shadow-sm" strokeWidth={1.5} />
                   </div>
                   <div className="w-full border-t border-gray-100 pt-2 flex flex-col h-14 justify-end">
                     <p className="text-xs font-medium text-gray-700 leading-tight mb-1 line-clamp-2 text-center" title={product.name}>{product.name}</p>
                     <p className="text-sm font-bold text-[#41b86d] text-center">{formatDZD(product.priceSale)}</p>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
+          {visibleCustomCards.length > 0 && (
+            <div className="mt-6">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-semibold text-[#41b86d]">Ventes personnalisées</p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {visibleCustomCards.map(card => (
+                  <div
+                    key={card.id}
+                    className="relative border border-gray-100 rounded-2xl bg-white p-3 shadow-sm cursor-pointer"
+                    onClick={() => openCustomCardModal(card)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">{card.category}</p>
+                      <span className="text-[10px] font-black text-gray-500">{card.kg} kg</span>
+                    </div>
+                    <p className="mt-2 text-sm font-bold text-gray-800 line-clamp-2">{card.baseProductName}</p>
+                    <p className="text-xs text-gray-500 mt-1">Prix unitaire</p>
+                    <p className="text-lg font-black text-[#41b86d]">{formatDZD(card.unitPrice)} / kg</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Category filters */}
@@ -217,7 +411,13 @@ export default function CaissePage() {
                 <div key={item.product.id} className="flex items-center gap-3 bg-white rounded-lg p-3 shadow-sm border border-gray-50 mb-2 group transition-all hover:border-gray-200">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-gray-800 truncate">{item.product.name}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{formatDZD(item.product.priceSale)}</p>
+                    {item.customUnitPrice ? (
+                      <p className="text-[10px] text-[#41b86d] mt-1 font-semibold">
+                        {item.weightKg ?? item.quantity} kg × {formatDZD(item.customUnitPrice)} / kg
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-0.5">{formatDZD(item.product.priceSale)}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <button onClick={() => updateQty(item.product.id, -1)} className="h-7 w-7 rounded-sm bg-gray-50 border border-gray-200 flex items-center justify-center hover:bg-gray-100 hover:text-gray-900 text-gray-500 transition-colors">
@@ -443,6 +643,95 @@ export default function CaissePage() {
           </DialogHeader>
           <Input type="number" placeholder="Montant en DZD" className="h-11 border-gray-200" value={tempReduction} onChange={e => setTempReduction(e.target.value)} />
           <Button onClick={() => { setReduction(Number(tempReduction) || 0); setShowReduction(false); }} className="w-full h-11 mt-2 bg-[#628b9a] hover:bg-[#527b8a] text-white font-bold">Appliquer</Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Custom kg modal */}
+      <Dialog open={showCustomModal} onOpenChange={open => { if (!open) closeCustomModal(); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-bold">Vente personnalisée</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm font-semibold text-gray-700">{customModalProduct?.name}</p>
+            <div className="space-y-1">
+              <p className="text-[11px] uppercase tracking-widest text-gray-500">Quantité (kg)</p>
+              <Input
+                type="number"
+                placeholder="Ex. 25"
+                className="h-11 border-gray-200"
+                value={customModalKg}
+                onChange={e => setCustomModalKg(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] uppercase tracking-widest text-gray-500">Prix unitaire (DZD/kg)</p>
+              <Input
+                type="number"
+                placeholder="Ex. 1200"
+                className="h-11 border-gray-200"
+                value={customModalUnitPrice}
+                onChange={e => setCustomModalUnitPrice(e.target.value)}
+              />
+            </div>
+            {previewCustomTotal > 0 && (
+              <div className="rounded-2xl border border-dashed border-[#41b86d]/40 bg-[#ecf8f7] px-4 py-2 text-sm font-semibold text-[#1f7161]">
+                Total estimé : {formatDZD(previewCustomTotal)}
+              </div>
+            )}
+          </div>
+          <Button
+            disabled={!customModalProduct || !(Number(customModalKg) > 0) || !(Number(customModalUnitPrice) > 0)}
+            onClick={handleCustomSaleConfirm}
+            className="w-full h-11 mt-2 bg-[#41b86d] hover:bg-[#378f63] text-white font-bold"
+          >
+            Ajouter au panier
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Custom card quick sale modal */}
+      <Dialog open={!!activeCustomCard} onOpenChange={open => { if (!open) { setActiveCustomCard(null); setCustomCardKg(""); } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-bold">Vente rapide</DialogTitle>
+          </DialogHeader>
+          {activeCustomCard && (
+            <div className="space-y-4 pt-2">
+              <p className="text-sm font-semibold text-gray-700">{activeCustomCard.baseProductName}</p>
+              <div className="space-y-1">
+                <p className="text-[11px] uppercase tracking-widest text-gray-500">Quantité à vendre (kg)</p>
+                <Input
+                  type="number"
+                  placeholder="Ex. 25"
+                  className="h-11 border-gray-200"
+                  value={customCardKg}
+                  max={remainingCustomKg || undefined}
+                  onChange={e => setCustomCardKg(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-gray-500">Prix unitaire fixé : {formatDZD(activeCustomCard.unitPrice)} / kg</p>
+              {remainingCustomKg > 0 && (
+                <p className="text-xs text-[#41b86d] font-semibold">Disponible : {remainingCustomKg} kg</p>
+              )}
+              {previewCustomCardTotal > 0 && (
+                <div className="rounded-2xl border border-dashed border-[#41b86d]/40 bg-[#ecf8f7] px-4 py-2 text-sm font-semibold text-[#1f7161]">
+                  Total estimé : {formatDZD(previewCustomCardTotal)}
+                </div>
+              )}
+              <Button
+                disabled={!customCardKg || Number(customCardKg) <= 0 || Number(customCardKg) > remainingCustomKg}
+                onClick={() => {
+                  handleCustomCardAdd(activeCustomCard, Number(customCardKg) || 0);
+                  setActiveCustomCard(null);
+                  setCustomCardKg("");
+                }}
+                className="w-full h-11 mt-2 bg-[#41b86d] hover:bg-[#378f63] text-white font-bold"
+              >
+                Ajouter au panier
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

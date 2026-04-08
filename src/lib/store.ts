@@ -19,11 +19,23 @@ export interface CartItem {
   quantity: number;
   weightKg?: number;
   subtotal: number;
+  customUnitPrice?: number;
+  customBaseProductId?: string;
+  customCardId?: string;
 }
 
 export interface TeinteEntry {
   unitPrice: number;
   kg: number;
+}
+
+export interface CustomSaleCard {
+  id: string;
+  baseProductId: string;
+  baseProductName: string;
+  category: CategoryType;
+  kg: number;
+  unitPrice: number;
 }
 
 export interface Bon {
@@ -36,7 +48,6 @@ export interface Bon {
   reduction: number;
   total: number;
   date: string;
-  status: 'en_cours' | 'payé';
   teinteEntries?: TeinteEntry[];
 }
 
@@ -107,11 +118,23 @@ export function updateProductStock(id: string, delta: number) {
 export function getBons(): Bon[] { return load<Bon[]>('bons', []); }
 export function saveBons(b: Bon[]) { save('bons', b); }
 export function addBon(b: Bon) { const bons = getBons(); bons.unshift(b); saveBons(bons); }
+export function updateBon(updated: Bon) {
+  const bons = getBons();
+  const idx = bons.findIndex(b => b.id === updated.id);
+  if (idx >= 0) {
+    bons[idx] = updated;
+    saveBons(bons);
+  }
+}
 
 // --- Sales ---
 export function getSales(): Sale[] { return load<Sale[]>('sales', []); }
 export function saveSales(s: Sale[]) { save('sales', s); }
 export function addSale(s: Sale) { const sales = getSales(); sales.unshift(s); saveSales(sales); }
+
+// --- Custom cards ---
+export function getCustomCards(): CustomSaleCard[] { return load<CustomSaleCard[]>('custom_cards', []); }
+export function saveCustomCards(cards: CustomSaleCard[]) { save('custom_cards', cards); }
 
 // --- Suppliers ---
 export function getSuppliers(): Supplier[] { return load<Supplier[]>('suppliers', []); }
