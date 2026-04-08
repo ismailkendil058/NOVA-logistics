@@ -300,14 +300,15 @@ export default function FacturesPage() {
                           <SelectTrigger className="h-12 rounded-2xl border-gray-200 bg-white text-sm">
                             <SelectValue />
                           </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="satine">SatinÃ©</SelectItem>
-                            <SelectItem value="enduit">Enduit</SelectItem>
-                            <SelectItem value="vinyle">Vinyle</SelectItem>
-                            <SelectItem value="decor">DÃ©cor</SelectItem>
-                            <SelectItem value="fixateur">Fixateur</SelectItem>
-                            <SelectItem value="accessoires">Accessoires</SelectItem>
-                          </SelectContent>
+                            <SelectContent>
+                              <SelectItem value="satine">SatinÃ©</SelectItem>
+                              <SelectItem value="enduit">Enduit</SelectItem>
+                              <SelectItem value="vinyle">Vinyle</SelectItem>
+                              <SelectItem value="laque">Laque</SelectItem>
+                              <SelectItem value="decor">DÃ©cor</SelectItem>
+                              <SelectItem value="fixateur">Fixateur</SelectItem>
+                              <SelectItem value="accessoires">Accessoires</SelectItem>
+                            </SelectContent>
                         </Select>
                       </>
                     ) : (
@@ -430,6 +431,7 @@ export default function FacturesPage() {
                                 <SelectItem value="satine">Satiné</SelectItem>
                                 <SelectItem value="enduit">Enduit</SelectItem>
                                 <SelectItem value="vinyle">Vinyle</SelectItem>
+                                <SelectItem value="laque">Laque</SelectItem>
                                 <SelectItem value="decor">Décor</SelectItem>
                                 <SelectItem value="fixateur">Fixateur</SelectItem>
                                 <SelectItem value="accessoires">Accessoires</SelectItem>
@@ -629,6 +631,7 @@ export default function FacturesPage() {
                           <SelectItem value="satine">SatinÃ©</SelectItem>
                           <SelectItem value="enduit">Enduit</SelectItem>
                           <SelectItem value="vinyle">Vinyle</SelectItem>
+                          <SelectItem value="laque">Laque</SelectItem>
                           <SelectItem value="decor">DÃ©cor</SelectItem>
                           <SelectItem value="fixateur">Fixateur</SelectItem>
                           <SelectItem value="accessoires">Accessoires</SelectItem>
@@ -784,6 +787,7 @@ export default function FacturesPage() {
                               <SelectItem value="satine">Satiné</SelectItem>
                               <SelectItem value="enduit">Enduit</SelectItem>
                               <SelectItem value="vinyle">Vinyle</SelectItem>
+                              <SelectItem value="laque">Laque</SelectItem>
                               <SelectItem value="decor">Décor</SelectItem>
                               <SelectItem value="fixateur">Fixateur</SelectItem>
                               <SelectItem value="accessoires">Accessoires</SelectItem>

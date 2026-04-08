@@ -14,10 +14,10 @@ export function AppSidebar() {
   const location = useLocation();
 
   return (
-    <aside className="w-72 min-h-screen bg-white flex flex-col border-r border-gray-200 shadow-sm z-20 font-sans">
+    <aside className="w-60 min-h-screen bg-white flex flex-col border-r border-gray-200 shadow-sm z-20 font-sans">
       {/* Logo */}
-      <div className="px-8 py-10 border-b border-gray-100 flex flex-col items-start">
-        <h1 className="text-3xl font-black tracking-tighter text-[#3f5362]">
+      <div className="px-6 py-8 border-b border-gray-100 flex flex-col items-start">
+        <h1 className="text-[28px] font-black tracking-tighter text-[#3f5362]">
           NOVA<span className="text-[#41b86d]">DECO</span>
         </h1>
         <p className="text-[10px] font-bold text-gray-400 mt-1 tracking-[0.2em] uppercase">
@@ -26,7 +26,7 @@ export function AppSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-8 space-y-2">
+      <nav className="flex-1 px-3 py-6 space-y-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.url;
           return (
@@ -34,7 +34,7 @@ export function AppSidebar() {
               key={item.url}
               to={item.url}
               end
-              className={`flex items-center gap-4 px-4 py-3.5 rounded-xl text-sm transition-all duration-200 group font-bold ${isActive
+              className={`flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm transition-all duration-200 group font-bold ${isActive
                   ? "bg-[#41b86d] text-white shadow-[0_4px_14px_0_rgba(65,184,109,0.39)] hover:-translate-y-0.5"
                   : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
                 }`}
@@ -48,7 +48,7 @@ export function AppSidebar() {
       </nav>
 
       {/* Footer */}
-      <div className="px-8 py-6 border-t border-gray-100 bg-gray-50/50">
+      <div className="px-6 py-5 border-t border-gray-100 bg-gray-50/50">
         <p className="text-[10px] font-bold text-gray-300 uppercase tracking-wider">© 2026 Nova Deco · Algérie</p>
       </div>
     </aside>
