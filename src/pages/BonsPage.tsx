@@ -95,9 +95,22 @@ export default function BonsPage() {
                   </div>
                 ))}
                 {selectedBon.teinteAmount > 0 && (
-                  <div className="flex justify-between font-bold text-sm text-[#41b86d] px-2 pt-2">
-                    <span>La Teinte</span>
-                    <span>+{formatDZD(selectedBon.teinteAmount)}</span>
+                  <div className="space-y-2 px-2 pt-2">
+                    <div className="flex justify-between font-bold text-sm text-[#41b86d]">
+                      <span>La Teinte</span>
+                      <span>+{formatDZD(selectedBon.teinteAmount)}</span>
+                    </div>
+                    {selectedBon.teinteEntries?.length > 0 && (
+                      <div className="space-y-1 text-[11px] text-[#41b86d]">
+                        {selectedBon.teinteEntries.map((entry, index) => (
+                          <div key={index} className="flex justify-between gap-2">
+                            <span>Teinte {index + 1} • {entry.kg} kg</span>
+                            <span>{formatDZD(entry.unitPrice)} / kg</span>
+                            <span>{formatDZD(entry.unitPrice * entry.kg)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 {selectedBon.reduction > 0 && (

@@ -21,6 +21,11 @@ export interface CartItem {
   subtotal: number;
 }
 
+export interface TeinteEntry {
+  unitPrice: number;
+  kg: number;
+}
+
 export interface Bon {
   id: string;
   number: string;
@@ -32,6 +37,7 @@ export interface Bon {
   total: number;
   date: string;
   status: 'en_cours' | 'payé';
+  teinteEntries?: TeinteEntry[];
 }
 
 export interface Sale {
@@ -43,6 +49,7 @@ export interface Sale {
   reduction: number;
   total: number;
   date: string;
+  teinteEntries?: TeinteEntry[];
 }
 
 export interface Supplier {

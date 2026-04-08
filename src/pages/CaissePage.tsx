@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   getProducts, CartItem, Product, CategoryType, CATEGORIES,
-  formatDZD, generateId, addSale, addBon, updateProductStock
+  formatDZD, generateId, addSale, addBon, updateProductStock, TeinteEntry
 } from "@/lib/store";
 
 const categoryIcons: Record<CategoryType, React.ElementType> = {
@@ -26,20 +26,34 @@ const categoryColors: Record<CategoryType, string> = {
   accessoires: "bg-[#e6a861] hover:bg-[#d69851] text-white",
 };
 
+type TempTeinteEntry = { unitPrice: string; kg: string };
+const createTempTeinteEntry = (): TempTeinteEntry => ({ unitPrice: "", kg: "" });
+
 export default function CaissePage() {
   const [products] = useState(getProducts());
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<CategoryType | null>(null);
-  const [teinteAmount, setTeinteAmount] = useState(0);
+  const [teinteEntries, setTeinteEntries] = useState<TeinteEntry[]>([]);
   const [reduction, setReduction] = useState(0);
   const [showCheckout, setShowCheckout] = useState(false);
   const [showTeinte, setShowTeinte] = useState(false);
   const [showReduction, setShowReduction] = useState(false);
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
-  const [tempTeinte, setTempTeinte] = useState("");
+  const [mobileSection, setMobileSection] = useState<"products" | "cart">("products");
+  const [tempTeinteEntries, setTempTeinteEntries] = useState<TempTeinteEntry[]>([createTempTeinteEntry()]);
   const [tempReduction, setTempReduction] = useState("");
+  const previewTeinteAmount = tempTeinteEntries.reduce((sum, entry) => {
+    const unitPrice = Number(entry.unitPrice) || 0;
+    const kg = Number(entry.kg) || 0;
+    return sum + unitPrice * kg;
+  }, 0);
+  const sectionOptions = [
+    { id: "products", label: "Produits" },
+    { id: "cart", label: "Panier" },
+  ] as const;
+  const hasValidTempTeinteEntry = tempTeinteEntries.some(entry => (Number(entry.unitPrice) || 0) > 0 && (Number(entry.kg) || 0) > 0);
 
   const filteredProducts = useMemo(() => {
     return products.filter(p => {
@@ -73,6 +87,7 @@ export default function CaissePage() {
   const removeItem = (id: string) => setCart(prev => prev.filter(c => c.product.id !== id));
 
   const subtotal = cart.reduce((s, c) => s + c.subtotal, 0);
+  const teinteAmount = teinteEntries.reduce((s, entry) => s + entry.unitPrice * entry.kg, 0);
   const total = subtotal + teinteAmount - reduction;
 
   const handleCheckout = (type: 'direct' | 'bon') => {
@@ -80,16 +95,17 @@ export default function CaissePage() {
     cart.forEach(item => updateProductStock(item.product.id, -item.quantity));
 
     if (type === 'direct') {
-      addSale({ id: saleId, type: 'direct', items: [...cart], teinteAmount, reduction, total, date: new Date().toISOString() });
+      addSale({ id: saleId, type: 'direct', items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
     } else {
       const bonId = generateId();
       const bonNumber = `BON-${Date.now().toString().slice(-6)}`;
-      addBon({ id: bonId, number: bonNumber, clientName, clientPhone, items: [...cart], teinteAmount, reduction, total, date: new Date().toISOString(), status: 'en_cours' });
-      addSale({ id: saleId, type: 'bon', bonId, items: [...cart], teinteAmount, reduction, total, date: new Date().toISOString() });
+      addBon({ id: bonId, number: bonNumber, clientName, clientPhone, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString(), status: 'en_cours' });
+      addSale({ id: saleId, type: 'bon', bonId, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
     }
 
     setCart([]);
-    setTeinteAmount(0);
+    setTeinteEntries([]);
+    setTempTeinteEntries([createTempTeinteEntry()]);
     setReduction(0);
     setClientName("");
     setClientPhone("");
@@ -97,10 +113,31 @@ export default function CaissePage() {
   };
 
   return (
-    <div className="flex h-screen animate-fade-in bg-[#f4f8f8] font-sans">
+    <div className="flex min-h-screen flex-col lg:flex-row animate-fade-in bg-[#f4f8f8] font-sans">
+      <div className="lg:hidden w-full border-b border-gray-200 bg-white px-4 pt-4 pb-3 shadow-sm z-10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-black tracking-tight text-gray-800">Caisse</h2>
+            <p className="text-sm text-gray-500">Point de vente</p>
+          </div>
+        </div>
+        <div className="mt-3 flex gap-2">
+          {sectionOptions.map(option => (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => setMobileSection(option.id)}
+              aria-pressed={mobileSection === option.id}
+              className={`flex-1 rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#628b9a] ${mobileSection === option.id ? "bg-[#628b9a] border-transparent text-white" : "bg-white border-gray-200 text-gray-600"}`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
       {/* Left panel — Products */}
-      <div className="flex-1 flex flex-col p-4 lg:p-6 border-r border-gray-200">
-        <div className="mb-4 flex items-center justify-between">
+      <div className={`${mobileSection === "cart" ? "hidden" : ""} flex-1 flex flex-col border-b border-gray-200 bg-white p-4 lg:flex lg:p-6 lg:border-r lg:border-gray-200 lg:bg-white`}>
+        <div className="mb-4 hidden items-center justify-between lg:flex">
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-gray-800">Caisse</h2>
             <p className="text-sm font-medium text-gray-500">Point de vente</p>
@@ -162,7 +199,7 @@ export default function CaissePage() {
       </div>
 
       {/* Right panel — Cart */}
-      <div className="w-[400px] flex flex-col bg-white border-l border-gray-200 z-10 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.02)]">
+      <div className={`${mobileSection === "products" ? "hidden" : ""} flex w-full flex-col bg-white border-l border-gray-200 z-10 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.02)] lg:flex lg:w-[400px]`}>
         <div className="p-6 border-b border-gray-100 bg-white">
           <h3 className="text-xl font-bold tracking-tight text-gray-800">Panier</h3>
         </div>
@@ -212,11 +249,37 @@ export default function CaissePage() {
             </div>
 
             <div className="flex justify-between items-center bg-gray-50/50 p-2 rounded -mx-2">
-              <button onClick={() => { setTempTeinte(teinteAmount.toString()); setShowTeinte(true); }} className="flex items-center gap-2 text-[#628b9a] hover:underline text-sm font-semibold">
+              <button
+                onClick={() => {
+                  if (teinteEntries.length) {
+                    setTempTeinteEntries(teinteEntries.map(entry => ({
+                      unitPrice: entry.unitPrice.toString(),
+                      kg: entry.kg.toString(),
+                    })));
+                  } else {
+                    setTempTeinteEntries([createTempTeinteEntry()]);
+                  }
+                  setShowTeinte(true);
+                }}
+                className="flex items-center gap-2 text-[#628b9a] hover:underline text-sm font-semibold"
+              >
                 <Paintbrush className="h-4 w-4" />
                 La Teinte
               </button>
-              <span className="font-semibold text-gray-700">{teinteAmount > 0 ? `+${formatDZD(teinteAmount)}` : '—'}</span>
+              <div className="text-right">
+                <span className="font-semibold text-gray-700">
+                  {teinteAmount > 0 ? `+${formatDZD(teinteAmount)}` : '—'}
+                </span>
+                {teinteEntries.length > 0 && (
+                  <div className="text-[10px] text-gray-400 space-y-1 mt-1">
+                    {teinteEntries.map((entry, index) => (
+                      <div key={index}>
+                        <span>{entry.kg} kg</span> × <span>{formatDZD(entry.unitPrice)}</span> / kg
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-between items-center bg-gray-50/50 p-2 rounded -mx-2">
@@ -284,8 +347,91 @@ export default function CaissePage() {
           <DialogHeader>
             <DialogTitle className="font-bold">La Teinte</DialogTitle>
           </DialogHeader>
-          <Input type="number" placeholder="Montant en DZD" className="h-11 border-gray-200" value={tempTeinte} onChange={e => setTempTeinte(e.target.value)} />
-          <Button onClick={() => { setTeinteAmount(Number(tempTeinte) || 0); setShowTeinte(false); }} className="w-full h-11 mt-2 bg-[#628b9a] hover:bg-[#527b8a] text-white font-bold">Appliquer</Button>
+          <div className="space-y-4 pt-2">
+            <p className="text-sm text-gray-500">Définissez un prix unitaire et une quantité pour chaque teinte. Le total se met à jour instantanément.</p>
+            {tempTeinteEntries.map((entry, index) => {
+              const entryTotal = (Number(entry.unitPrice) || 0) * (Number(entry.kg) || 0);
+              const isInvalid = !entry.unitPrice || !entry.kg;
+              return (
+                <div key={index} className="bg-white border border-gray-200 rounded-2xl p-3 shadow-sm">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">Teinte {index + 1}</span>
+                    {tempTeinteEntries.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setTempTeinteEntries(prev => prev.filter((_, i) => i !== index))}
+                        className="text-[11px] font-semibold text-red-500"
+                      >
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="text-[11px] uppercase tracking-widest text-gray-500">Unitaire</label>
+                      <Input
+                        type="number"
+                        placeholder="Prix (DZD/kg)"
+                        className={`h-11 border ${isInvalid && !entry.unitPrice ? "border-red-200" : "border-gray-200"}`}
+                        value={entry.unitPrice}
+                        onChange={e => setTempTeinteEntries(prev => prev.map((item, i) => i === index ? { ...item, unitPrice: e.target.value } : item))}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[11px] uppercase tracking-widest text-gray-500">Kg</label>
+                      <Input
+                        type="number"
+                        placeholder="Quantité"
+                        className={`h-11 border ${isInvalid && !entry.kg ? "border-red-200" : "border-gray-200"}`}
+                        value={entry.kg}
+                        onChange={e => setTempTeinteEntries(prev => prev.map((item, i) => i === index ? { ...item, kg: e.target.value } : item))}
+                      />
+                    </div>
+                    <div className="flex flex-col justify-center text-[11px] text-gray-500">
+                      {entryTotal > 0 ? (
+                        <>
+                          <span>Total</span>
+                          <span className="text-gray-900 font-black">{formatDZD(entryTotal)}</span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">En attente</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              className="w-full text-sm font-semibold text-[#628b9a] border border-[#628b9a] rounded-xl py-2 hover:bg-[#628b9a]/5"
+              onClick={() => setTempTeinteEntries(prev => [...prev, createTempTeinteEntry()])}
+            >
+              Ajouter une teinte
+            </button>
+            {previewTeinteAmount > 0 && (
+              <div className="rounded-2xl border border-dashed border-[#628b9a]/60 bg-[#ecf8f7] px-4 py-2 text-sm font-semibold text-[#1f7161]">
+                Total estimé : {formatDZD(previewTeinteAmount)}
+              </div>
+            )}
+          </div>
+          <Button
+            disabled={!hasValidTempTeinteEntry}
+            onClick={() => {
+              const normalizedEntries = tempTeinteEntries.map(entry => ({
+                unitPrice: Number(entry.unitPrice) || 0,
+                kg: Number(entry.kg) || 0,
+              })).filter(entry => entry.unitPrice > 0 && entry.kg > 0);
+              setTeinteEntries(normalizedEntries);
+              setTempTeinteEntries(normalizedEntries.length ? normalizedEntries.map(entry => ({
+                unitPrice: entry.unitPrice.toString(),
+                kg: entry.kg.toString(),
+              })) : [createTempTeinteEntry()]);
+              setShowTeinte(false);
+            }}
+            className="w-full h-11 mt-2 bg-[#628b9a] hover:bg-[#527b8a] text-white font-bold"
+          >
+            Appliquer
+          </Button>
         </DialogContent>
       </Dialog>
 
@@ -311,4 +457,3 @@ function ShoppingCartEmpty() {
     </svg>
   );
 }
-
