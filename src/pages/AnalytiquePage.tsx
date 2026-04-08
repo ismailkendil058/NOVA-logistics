@@ -26,10 +26,15 @@ export default function AnalytiquePage() {
     );
   }, [month]);
 
+  const getItemPurchaseCost = (item: (typeof sales)[number]["items"][number]) => {
+    const unitCost = item.customUnitCost ?? item.product.priceBuy;
+    return unitCost * item.quantity;
+  };
+
   const totalRevenue = monthlySales.reduce((s, sale) => s + sale.total, 0);
   const totalTeinte = monthlySales.reduce((s, sale) => s + sale.teinteAmount, 0);
   const totalCost = monthlySales.reduce((s, sale) => {
-    return s + sale.items.reduce((is, item) => is + item.product.priceBuy * item.quantity, 0);
+    return s + sale.items.reduce((is, item) => is + getItemPurchaseCost(item), 0);
   }, 0);
   const profit = totalRevenue - totalCost;
 
@@ -75,7 +80,7 @@ export default function AnalytiquePage() {
       existing.teinte += sale.teinteAmount;
       const entryCount = sale.teinteEntries?.length ?? (sale.teinteAmount > 0 ? 1 : 0);
       existing.teinteEntriesCount += entryCount;
-      existing.cost += sale.items.reduce((s, i) => s + i.product.priceBuy * i.quantity, 0);
+      existing.cost += sale.items.reduce((s, i) => s + getItemPurchaseCost(i), 0);
       if (sale.type === "bon") {
         existing.bonCount += 1;
       } else {

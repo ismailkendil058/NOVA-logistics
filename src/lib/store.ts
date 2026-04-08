@@ -20,6 +20,7 @@ export interface CartItem {
   weightKg?: number;
   subtotal: number;
   customUnitPrice?: number;
+  customUnitCost?: number;
   customBaseProductId?: string;
   customCardId?: string;
 }
@@ -36,6 +37,7 @@ export interface CustomSaleCard {
   category: CategoryType;
   kg: number;
   unitPrice: number;
+  priceBuyPerKg?: number;
 }
 
 export interface Bon {

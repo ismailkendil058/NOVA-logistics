@@ -103,12 +103,24 @@ export default function CaissePage() {
     setCustomModalUnitPrice("");
   };
 
-  const addCustomCartItem = (baseProduct: Product, kg: number, unitPrice: number, customCardId?: string) => {
+  const getCustomPurchaseCostPerKg = (baseProduct: Product, kg: number) => {
+    if (kg <= 0) return baseProduct.priceBuy;
+    return baseProduct.priceBuy / kg;
+  };
+
+  const addCustomCartItem = (
+    baseProduct: Product,
+    kg: number,
+    unitPrice: number,
+    customPurchaseCostPerKg: number,
+    customCardId?: string
+  ) => {
     const customProduct: Product = {
       ...baseProduct,
       id: `${baseProduct.id}-custom-${Date.now()}`,
       name: `${baseProduct.name} (${kg} kg)`,
       priceSale: unitPrice,
+      priceBuy: customPurchaseCostPerKg,
     };
 
     const newItem: CartItem = {
@@ -117,6 +129,7 @@ export default function CaissePage() {
       subtotal: kg * unitPrice,
       weightKg: kg,
       customUnitPrice: unitPrice,
+      customUnitCost: customPurchaseCostPerKg,
       customBaseProductId: baseProduct.id,
       customCardId,
     };
@@ -124,7 +137,7 @@ export default function CaissePage() {
     setCart(prev => [...prev, newItem]);
   };
 
-  const addCustomCardEntry = (baseProduct: Product, kg: number, unitPrice: number) => {
+  const addCustomCardEntry = (baseProduct: Product, kg: number, unitPrice: number, priceBuyPerKg: number) => {
     const card: CustomSaleCard = {
       id: `${baseProduct.id}-custom-card-${Date.now()}`,
       baseProductId: baseProduct.id,
@@ -132,6 +145,7 @@ export default function CaissePage() {
       category: baseProduct.category,
       kg,
       unitPrice,
+      priceBuyPerKg,
     };
     setCustomCards(prev => [...prev, card]);
   };
@@ -141,9 +155,10 @@ export default function CaissePage() {
     const kg = Number(customModalKg);
     const unitPrice = Number(customModalUnitPrice);
     if (!kg || !unitPrice) return;
+    const customPurchaseCostPerKg = getCustomPurchaseCostPerKg(customModalProduct, kg);
 
-    addCustomCartItem(customModalProduct, kg, unitPrice);
-    addCustomCardEntry(customModalProduct, kg, unitPrice);
+    addCustomCartItem(customModalProduct, kg, unitPrice, customPurchaseCostPerKg);
+    addCustomCardEntry(customModalProduct, kg, unitPrice, customPurchaseCostPerKg);
     closeCustomModal();
   };
 
@@ -160,7 +175,8 @@ export default function CaissePage() {
     if (!baseProduct || baseProduct.stock <= 0) return;
     const pending = getCustomCardPendingKg(card.id);
     if (kg > card.kg - pending) return;
-    addCustomCartItem(baseProduct, kg, card.unitPrice, card.id);
+    const customPurchaseCostPerKg = card.priceBuyPerKg ?? getCustomPurchaseCostPerKg(baseProduct, card.kg);
+    addCustomCartItem(baseProduct, kg, card.unitPrice, customPurchaseCostPerKg, card.id);
     setActiveCustomCard(prev => {
       if (!prev || prev.id !== card.id) return prev;
       const remaining = Math.max(0, prev.kg - kg);
