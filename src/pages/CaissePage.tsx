@@ -348,7 +348,7 @@ export default function CaissePage() {
                   onClick={() => setActiveCategory(activeCategory === cat.key ? null : cat.key)}
                   className={`min-w-[108px] md:min-w-[116px] flex-shrink-0 py-4 md:min-h-[84px] rounded-lg transition-all flex flex-col items-center justify-center gap-1.5 shadow-sm border border-transparent ${categoryColors[cat.key]} ${activeCategory === cat.key ? 'ring-4 ring-black/10 scale-[0.98]' : 'hover:-translate-y-0.5'}`}
                 >
-                  <CategoryIcon className="hidden md:block h-7 w-7" strokeWidth={2.2} />
+                  <CategoryIcon className="hidden md:block h-7 w-[35px]" strokeWidth={2.2} />
                   <div className="text-[9px] md:text-[9px] opacity-80 uppercase tracking-wider">{cat.labelAr}</div>
                   <span className="font-semibold text-xs md:text-sm tracking-wide text-center leading-tight max-w-[72px] whitespace-normal">{cat.label}</span>
                 </button>
@@ -431,7 +431,7 @@ export default function CaissePage() {
                   onClick={() => setActiveCategory(activeCategory === cat.key ? null : cat.key)}
                   className={`min-w-[108px] md:min-w-[116px] flex-shrink-0 py-4 md:min-h-[84px] rounded-lg transition-all flex flex-col items-center justify-center gap-1.5 shadow-sm border border-transparent ${categoryColors[cat.key]} ${activeCategory === cat.key ? 'ring-4 ring-black/10 scale-[0.98]' : 'hover:-translate-y-0.5'}`}
                 >
-                  <CategoryIcon className="hidden md:block h-7 w-7" strokeWidth={2.2} />
+                  <CategoryIcon className="hidden md:block h-7 w-[35px]" strokeWidth={2.2} />
                   <div className="text-[9px] md:text-[9px] opacity-80 uppercase tracking-wider">{cat.labelAr}</div>
                   <span className="font-semibold text-xs md:text-sm tracking-wide text-center leading-tight max-w-[72px] whitespace-normal">{cat.label}</span>
                 </button>

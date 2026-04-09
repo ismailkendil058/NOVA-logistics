@@ -81,10 +81,6 @@ export default function FacturesPage() {
     && draftInvoiceItem.priceBuy > 0
     && draftInvoiceItem.priceSale > 0
     && (draftInvoiceItem.isNew ? draftInvoiceItem.newName.trim().length > 0 : draftInvoiceItem.productId.length > 0);
-  const draftMarginPerUnit = draftInvoiceItem.priceSale - draftInvoiceItem.priceBuy;
-  const draftMarginRate = draftInvoiceItem.priceBuy > 0 ? (draftMarginPerUnit / draftInvoiceItem.priceBuy) * 100 : 0;
-  const draftTotalMargin = draftMarginPerUnit * draftInvoiceItem.quantity;
-
   const addInvoiceItem = () => {
     if (!canAddDraftInvoiceItem) return;
     setInvoiceItems(prev => [...prev, { ...draftInvoiceItem, newName: draftInvoiceItem.newName.trim() }]);
@@ -120,7 +116,7 @@ export default function FacturesPage() {
       if (item.isNew) {
         product = {
           id: generateId(), name: item.newName, nameAr: "", category: item.newCategory as any,
-          priceSale: item.priceSale, priceBuy: item.priceBuy, stock: item.quantity, unit: "unité", expiryDate: item.expiryDate || undefined
+          priceSale: item.priceSale, priceBuy: item.priceBuy, stock: item.quantity, unit: "unitÃ©", expiryDate: item.expiryDate || undefined
         };
         updatedProducts.push(product);
       } else {
@@ -205,7 +201,7 @@ export default function FacturesPage() {
     return s + (item ? item.priceBuy * ri.quantity : 0);
   }, 0);
 
-  // ─── ADD FACTURE VIEW ────────────────────────────────────────────────────────
+  // â”€â”€â”€ ADD FACTURE VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (view === "add") {
     if (isMobile) {
       return (
@@ -220,7 +216,7 @@ export default function FacturesPage() {
               </button>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">Factures</p>
               <h2 className="mt-3 text-3xl font-black tracking-tight">Nouvel achat</h2>
-              <p className="mt-1 text-sm text-white/70">Créez une facture fournisseur pensée pour le mobile.</p>
+              <p className="mt-1 text-sm text-white/70">CrÃ©ez une facture fournisseur pensÃ©e pour le mobile.</p>
             </div>
 
             <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
@@ -243,7 +239,7 @@ export default function FacturesPage() {
                 {isNewSupplier ? (
                   <>
                     <Input placeholder="Nom du fournisseur" value={newSupplier.name} onChange={e => setNewSupplier(p => ({ ...p, name: e.target.value }))} className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]" />
-                    <Input placeholder="Téléphone" value={newSupplier.phone} onChange={e => setNewSupplier(p => ({ ...p, phone: e.target.value }))} className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]" />
+                    <Input placeholder="TÃ©lÃ©phone" value={newSupplier.phone} onChange={e => setNewSupplier(p => ({ ...p, phone: e.target.value }))} className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]" />
                     <Input placeholder="Adresse" value={newSupplier.address} onChange={e => setNewSupplier(p => ({ ...p, address: e.target.value }))} className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]" />
                   </>
                 ) : (
@@ -301,11 +297,11 @@ export default function FacturesPage() {
                             <SelectValue />
                           </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="satine">SatinÃ©</SelectItem>
+                              <SelectItem value="satine">SatinÃƒÂ©</SelectItem>
                               <SelectItem value="enduit">Enduit</SelectItem>
                               <SelectItem value="vinyle">Vinyle</SelectItem>
                               <SelectItem value="laque">Laque</SelectItem>
-                              <SelectItem value="decor">DÃ©cor</SelectItem>
+                              <SelectItem value="decor">DÃƒÂ©cor</SelectItem>
                               <SelectItem value="fixateur">Fixateur</SelectItem>
                               <SelectItem value="accessoires">Accessoires</SelectItem>
                             </SelectContent>
@@ -322,24 +318,10 @@ export default function FacturesPage() {
                       </Select>
                     )}
                     <div className="grid grid-cols-2 gap-3">
-                      <Input type="number" placeholder="QuantitÃ©" value={draftInvoiceItem.quantity || ""} onChange={e => updateDraftInvoiceItem("quantity", Number(e.target.value))} className="h-12 rounded-2xl border-gray-200 bg-white" />
+                      <Input type="number" placeholder="QuantitÃƒÂ©" value={draftInvoiceItem.quantity || ""} onChange={e => updateDraftInvoiceItem("quantity", Number(e.target.value))} className="h-12 rounded-2xl border-gray-200 bg-white" />
                       <Input type="number" placeholder="Prix achat" value={draftInvoiceItem.priceBuy || ""} onChange={e => updateDraftInvoiceItem("priceBuy", Number(e.target.value))} className="h-12 rounded-2xl border-gray-200 bg-white" />
                       <Input type="number" placeholder="Prix vente" value={draftInvoiceItem.priceSale || ""} onChange={e => updateDraftInvoiceItem("priceSale", Number(e.target.value))} className="h-12 rounded-2xl border-gray-200 bg-white" />
                       <Input type="date" value={draftInvoiceItem.expiryDate || ""} onChange={e => updateDraftInvoiceItem("expiryDate", e.target.value)} className="h-12 rounded-2xl border-gray-200 bg-white" />
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 rounded-2xl border border-dashed border-[#41b86d]/30 bg-[#eef8f2] p-3 text-sm sm:grid-cols-3">
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Marge / unitÃ©</p>
-                        <p className={`mt-1 font-black ${draftMarginPerUnit >= 0 ? "text-[#41b86d]" : "text-red-500"}`}>{formatDZD(draftMarginPerUnit)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Taux</p>
-                        <p className={`mt-1 font-black ${draftMarginRate >= 0 ? "text-[#243740]" : "text-red-500"}`}>{draftMarginRate.toFixed(2)}%</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Marge totale</p>
-                        <p className={`mt-1 font-black ${draftTotalMargin >= 0 ? "text-[#41b86d]" : "text-red-500"}`}>{formatDZD(draftTotalMargin)}</p>
-                      </div>
                     </div>
                     <Button onClick={addInvoiceItem} disabled={!canAddDraftInvoiceItem} className="h-12 w-full rounded-2xl bg-[#41b86d] font-bold text-white hover:bg-[#39a05f]">
                       Valider le produit
@@ -348,7 +330,7 @@ export default function FacturesPage() {
                 </div>
                 {invoiceItems.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-[#c9dcda] px-4 py-10 text-center text-sm text-gray-400">
-                    Aucun produit validÃ©.
+                    Aucun produit validÃƒÂ©.
                   </div>
                 ) : (
                   <div className="overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white">
@@ -357,7 +339,7 @@ export default function FacturesPage() {
                         <thead className="bg-[#f7fbfa]">
                           <tr>
                             <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Produit</th>
-                            <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">QtÃ©</th>
+                            <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">QtÃƒÂ©</th>
                             <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Achat</th>
                             <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Vente</th>
                             <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Total</th>
@@ -389,7 +371,7 @@ export default function FacturesPage() {
               <div className="hidden mt-4 space-y-4">
                 {invoiceItems.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-[#c9dcda] px-4 py-10 text-center text-sm text-gray-400">
-                    Aucun produit ajouté.
+                    Aucun produit ajoutÃ©.
                   </div>
                 ) : (
                   invoiceItems.map((item, idx) => (
@@ -428,11 +410,11 @@ export default function FacturesPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="satine">Satiné</SelectItem>
+                                <SelectItem value="satine">SatinÃ©</SelectItem>
                                 <SelectItem value="enduit">Enduit</SelectItem>
                                 <SelectItem value="vinyle">Vinyle</SelectItem>
                                 <SelectItem value="laque">Laque</SelectItem>
-                                <SelectItem value="decor">Décor</SelectItem>
+                                <SelectItem value="decor">DÃ©cor</SelectItem>
                                 <SelectItem value="fixateur">Fixateur</SelectItem>
                                 <SelectItem value="accessoires">Accessoires</SelectItem>
                               </SelectContent>
@@ -449,7 +431,7 @@ export default function FacturesPage() {
                           </Select>
                         )}
                         <div className="grid grid-cols-2 gap-3">
-                          <Input type="number" placeholder="Quantité" value={item.quantity || ""} onChange={e => { const u = [...invoiceItems]; u[idx].quantity = Number(e.target.value); setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
+                          <Input type="number" placeholder="QuantitÃ©" value={item.quantity || ""} onChange={e => { const u = [...invoiceItems]; u[idx].quantity = Number(e.target.value); setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
                           <Input type="number" placeholder="Prix achat" value={item.priceBuy || ""} onChange={e => { const u = [...invoiceItems]; u[idx].priceBuy = Number(e.target.value); setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
                           <Input type="number" placeholder="Prix vente" value={item.priceSale || ""} onChange={e => { const u = [...invoiceItems]; u[idx].priceSale = Number(e.target.value); setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
                           <Input type="date" value={item.expiryDate || ""} onChange={e => { const u = [...invoiceItems]; u[idx].expiryDate = e.target.value; setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
@@ -541,7 +523,7 @@ export default function FacturesPage() {
                     <Input placeholder="Nom du fournisseur" value={newSupplier.name} onChange={e => setNewSupplier(p => ({ ...p, name: e.target.value }))} className="bg-gray-50 border-gray-200 h-11 rounded-xl focus-visible:ring-0" />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Téléphone</label>
+                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">TÃ©lÃ©phone</label>
                     <Input placeholder="0555 ..." value={newSupplier.phone} onChange={e => setNewSupplier(p => ({ ...p, phone: e.target.value }))} className="bg-gray-50 border-gray-200 h-11 rounded-xl focus-visible:ring-0" />
                   </div>
                   <div className="space-y-1.5">
@@ -554,7 +536,7 @@ export default function FacturesPage() {
                   <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Choisir un fournisseur</label>
                   <Select value={supplierId} onValueChange={setSupplierId}>
                     <SelectTrigger className="bg-gray-50 border-gray-200 h-11 rounded-xl focus-visible:ring-0">
-                      <SelectValue placeholder="Sélectionner..." />
+                      <SelectValue placeholder="SÃ©lectionner..." />
                     </SelectTrigger>
                     <SelectContent>
                       {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
@@ -621,18 +603,18 @@ export default function FacturesPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nom du produit</label>
-                      <Input placeholder="Ex: Peinture SatinÃ©e..." value={draftInvoiceItem.newName} onChange={e => updateDraftInvoiceItem("newName", e.target.value)} className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm" />
+                      <Input placeholder="Ex: Peinture SatinÃƒÂ©e..." value={draftInvoiceItem.newName} onChange={e => updateDraftInvoiceItem("newName", e.target.value)} className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm" />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">CatÃ©gorie</label>
+                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">CatÃƒÂ©gorie</label>
                       <Select value={draftInvoiceItem.newCategory} onValueChange={value => updateDraftInvoiceItem("newCategory", value)}>
                         <SelectTrigger className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="satine">SatinÃ©</SelectItem>
+                          <SelectItem value="satine">SatinÃƒÂ©</SelectItem>
                           <SelectItem value="enduit">Enduit</SelectItem>
                           <SelectItem value="vinyle">Vinyle</SelectItem>
                           <SelectItem value="laque">Laque</SelectItem>
-                          <SelectItem value="decor">DÃ©cor</SelectItem>
+                          <SelectItem value="decor">DÃƒÂ©cor</SelectItem>
                           <SelectItem value="fixateur">Fixateur</SelectItem>
                           <SelectItem value="accessoires">Accessoires</SelectItem>
                         </SelectContent>
@@ -651,10 +633,10 @@ export default function FacturesPage() {
 
                 <div className="grid grid-cols-4 gap-3">
                   {[
-                    { label: "QuantitÃ©", placeholder: "0", key: "quantity", type: "number" },
+                    { label: "QuantitÃƒÂ©", placeholder: "0", key: "quantity", type: "number" },
                     { label: "Prix achat", placeholder: "0 DZD", key: "priceBuy", type: "number" },
                     { label: "Prix vente", placeholder: "0 DZD", key: "priceSale", type: "number" },
-                    { label: "PÃ©remption", placeholder: "", key: "expiryDate", type: "date" },
+                    { label: "PÃƒÂ©remption", placeholder: "", key: "expiryDate", type: "date" },
                   ].map(field => (
                     <div key={field.key} className="space-y-1">
                       <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{field.label}</label>
@@ -669,20 +651,6 @@ export default function FacturesPage() {
                   ))}
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 rounded-xl border border-dashed border-[#41b86d]/25 bg-[#eef8f2] p-3">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Marge / unitÃ©</p>
-                    <p className={`mt-1 text-sm font-black ${draftMarginPerUnit >= 0 ? "text-[#41b86d]" : "text-red-500"}`}>{formatDZD(draftMarginPerUnit)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Taux</p>
-                    <p className={`mt-1 text-sm font-black ${draftMarginRate >= 0 ? "text-[#3f5362]" : "text-red-500"}`}>{draftMarginRate.toFixed(2)}%</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Marge totale</p>
-                    <p className={`mt-1 text-sm font-black ${draftTotalMargin >= 0 ? "text-[#41b86d]" : "text-red-500"}`}>{formatDZD(draftTotalMargin)}</p>
-                  </div>
-                </div>
 
                 <Button
                   onClick={addInvoiceItem}
@@ -698,7 +666,7 @@ export default function FacturesPage() {
               {invoiceItems.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
                   <PackagePlus className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm font-medium">Aucun produit validÃ©</p>
+                  <p className="text-sm font-medium">Aucun produit validÃƒÂ©</p>
                   <p className="text-xs mt-1">Remplissez le formulaire ci-dessus puis validez le produit.</p>
                 </div>
               ) : (
@@ -707,7 +675,7 @@ export default function FacturesPage() {
                     <thead className="bg-gray-50/80 border-b border-gray-100">
                       <tr>
                         <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Produit</th>
-                        <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">QtÃ©</th>
+                        <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">QtÃƒÂ©</th>
                         <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Prix achat</th>
                         <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Prix vente</th>
                         <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Total achat</th>
@@ -742,7 +710,7 @@ export default function FacturesPage() {
               {invoiceItems.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
                   <PackagePlus className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm font-medium">Aucun produit ajouté</p>
+                  <p className="text-sm font-medium">Aucun produit ajoutÃ©</p>
                   <p className="text-xs mt-1">Cliquez sur "Ajouter un produit" pour commencer</p>
                 </div>
               ) : (
@@ -777,18 +745,18 @@ export default function FacturesPage() {
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nom du produit</label>
-                          <Input placeholder="Ex: Peinture Satinée..." value={item.newName} onChange={e => { const u = [...invoiceItems]; u[idx].newName = e.target.value; setInvoiceItems(u); }} className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm" />
+                          <Input placeholder="Ex: Peinture SatinÃ©e..." value={item.newName} onChange={e => { const u = [...invoiceItems]; u[idx].newName = e.target.value; setInvoiceItems(u); }} className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm" />
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Catégorie</label>
+                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">CatÃ©gorie</label>
                           <Select value={item.newCategory} onValueChange={v => { const u = [...invoiceItems]; u[idx].newCategory = v; setInvoiceItems(u); }}>
                             <SelectTrigger className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="satine">Satiné</SelectItem>
+                              <SelectItem value="satine">SatinÃ©</SelectItem>
                               <SelectItem value="enduit">Enduit</SelectItem>
                               <SelectItem value="vinyle">Vinyle</SelectItem>
                               <SelectItem value="laque">Laque</SelectItem>
-                              <SelectItem value="decor">Décor</SelectItem>
+                              <SelectItem value="decor">DÃ©cor</SelectItem>
                               <SelectItem value="fixateur">Fixateur</SelectItem>
                               <SelectItem value="accessoires">Accessoires</SelectItem>
                             </SelectContent>
@@ -807,10 +775,10 @@ export default function FacturesPage() {
 
                     <div className="grid grid-cols-4 gap-3">
                       {[
-                        { label: "Quantité", placeholder: "0", key: "quantity", type: "number" },
+                        { label: "QuantitÃ©", placeholder: "0", key: "quantity", type: "number" },
                         { label: "Prix achat", placeholder: "0 DZD", key: "priceBuy", type: "number" },
                         { label: "Prix vente", placeholder: "0 DZD", key: "priceSale", type: "number" },
-                        { label: "Péremption", placeholder: "", key: "expiryDate", type: "date" },
+                        { label: "PÃ©remption", placeholder: "", key: "expiryDate", type: "date" },
                       ].map(field => (
                         <div key={field.key} className="space-y-1">
                           <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{field.label}</label>
@@ -859,7 +827,7 @@ export default function FacturesPage() {
     );
   }
 
-  // ─── RETOUR DE FACTURE VIEW ──────────────────────────────────────────────────
+  // â”€â”€â”€ RETOUR DE FACTURE VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (view === "return") {
     if (isMobile) {
       return (
@@ -874,7 +842,7 @@ export default function FacturesPage() {
               </button>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">Retours</p>
               <h2 className="mt-3 text-3xl font-black tracking-tight">Retour facture</h2>
-              <p className="mt-1 text-sm text-white/70">Sélectionnez une facture et les quantités à retirer.</p>
+              <p className="mt-1 text-sm text-white/70">SÃ©lectionnez une facture et les quantitÃ©s Ã  retirer.</p>
             </div>
 
             <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
@@ -895,7 +863,7 @@ export default function FacturesPage() {
 
             {selectedReturnInvoice && (
               <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
-                <p className="text-sm font-black text-[#243740]">Produits à retourner</p>
+                <p className="text-sm font-black text-[#243740]">Produits Ã  retourner</p>
                 <div className="mt-4 space-y-3">
                   {selectedReturnInvoice.items.map((item, idx) => {
                     const currentQty = returnItems.find(r => r.idx === idx)?.quantity || 0;
@@ -903,7 +871,7 @@ export default function FacturesPage() {
                       <div key={idx} className="rounded-[1.5rem] border border-gray-100 bg-[#f7fbfa] p-4">
                         <p className="text-sm font-bold text-[#243740]">{item.product.name}</p>
                         <p className="mt-1 text-xs text-gray-500">
-                          Acheté: {item.quantity} • {formatDZD(item.priceBuy)} / unité
+                          AchetÃ©: {item.quantity} â€¢ {formatDZD(item.priceBuy)} / unitÃ©
                         </p>
                         <Input
                           type="number"
@@ -911,7 +879,7 @@ export default function FacturesPage() {
                           min={0}
                           max={item.quantity}
                           value={currentQty || ""}
-                          placeholder="Qté retour"
+                          placeholder="QtÃ© retour"
                           onChange={e => {
                             const qty = Math.min(Number(e.target.value), item.quantity);
                             setReturnItems(prev => {
@@ -963,7 +931,7 @@ export default function FacturesPage() {
               </button>
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-[#3f5362]">Retour de Facture</h2>
-                <p className="text-xs text-gray-400 font-medium mt-0.5">Sélectionner une facture et les produits à retourner</p>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">SÃ©lectionner une facture et les produits Ã  retourner</p>
               </div>
             </div>
             <Button
@@ -987,7 +955,7 @@ export default function FacturesPage() {
               <h3 className="font-bold text-gray-700 text-sm tracking-wide uppercase">Facture d'origine</h3>
             </div>
             <div className="p-6">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-2">Sélectionner une facture d'achat</label>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-2">SÃ©lectionner une facture d'achat</label>
               <Select value={returnInvoiceId} onValueChange={v => { setReturnInvoiceId(v); setReturnItems([]); }}>
                 <SelectTrigger className="bg-gray-50 border-gray-200 h-11 rounded-xl focus-visible:ring-0 max-w-lg">
                   <SelectValue placeholder="Choisir une facture..." />
@@ -997,7 +965,7 @@ export default function FacturesPage() {
                     <SelectItem key={i.id} value={i.id}>
                       <span className="font-mono text-xs text-gray-400 mr-2">{i.number}</span>
                       {i.supplier.name}
-                      <span className="text-gray-400 ml-2 text-xs">· {new Date(i.date).toLocaleDateString("fr-FR")}</span>
+                      <span className="text-gray-400 ml-2 text-xs">Â· {new Date(i.date).toLocaleDateString("fr-FR")}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1009,8 +977,8 @@ export default function FacturesPage() {
           {selectedReturnInvoice && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-50">
-                <h3 className="font-bold text-gray-700 text-sm tracking-wide uppercase">Produits à retourner</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Saisir la quantité à retourner pour chaque produit (0 = pas de retour)</p>
+                <h3 className="font-bold text-gray-700 text-sm tracking-wide uppercase">Produits Ã  retourner</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Saisir la quantitÃ© Ã  retourner pour chaque produit (0 = pas de retour)</p>
               </div>
               <div className="p-6 space-y-3">
                 {selectedReturnInvoice.items.map((item, idx) => {
@@ -1020,13 +988,13 @@ export default function FacturesPage() {
                       <div className="flex-1">
                         <p className="font-bold text-gray-700 text-sm">{item.product.name}</p>
                         <p className="text-xs text-gray-400 mt-0.5">
-                          Acheté : <span className="font-bold text-gray-600">{item.quantity}</span>
-                          <span className="mx-2">·</span>
-                          {formatDZD(item.priceBuy)} / unité
+                          AchetÃ© : <span className="font-bold text-gray-600">{item.quantity}</span>
+                          <span className="mx-2">Â·</span>
+                          {formatDZD(item.priceBuy)} / unitÃ©
                         </p>
                       </div>
                       <div className="flex items-center gap-3 ml-6">
-                        <label className="text-xs font-bold text-gray-400">Qté retour</label>
+                        <label className="text-xs font-bold text-gray-400">QtÃ© retour</label>
                         <Input
                           type="number"
                           className="w-24 h-10 text-center rounded-xl border-gray-200 bg-white focus-visible:ring-0 font-bold text-gray-700"
@@ -1051,7 +1019,7 @@ export default function FacturesPage() {
               </div>
               {returnItems.length > 0 && (
                 <div className="px-6 py-4 border-t border-gray-100 bg-red-50/40 flex items-center justify-between">
-                  <span className="text-sm font-bold text-red-400">{returnItems.length} produit{returnItems.length > 1 ? "s" : ""} à retourner</span>
+                  <span className="text-sm font-bold text-red-400">{returnItems.length} produit{returnItems.length > 1 ? "s" : ""} Ã  retourner</span>
                   <span className="text-xl font-black text-red-500">{formatDZD(returnTotal)}</span>
                 </div>
               )}
@@ -1081,7 +1049,7 @@ export default function FacturesPage() {
     );
   }
 
-  // ─── LIST VIEW ───────────────────────────────────────────────────────────────
+  // â”€â”€â”€ LIST VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (isMobile) {
     return (
       <div className="min-h-screen bg-[#eef5f4] px-4 pb-6 pt-5 text-gray-800">
@@ -1132,7 +1100,7 @@ export default function FacturesPage() {
           <div className="space-y-3">
             {filtered.length === 0 ? (
               <div className="rounded-[1.75rem] border border-dashed border-[#c9dcda] bg-white px-4 py-10 text-center text-sm font-medium text-gray-400">
-                Aucune facture trouvée.
+                Aucune facture trouvÃ©e.
               </div>
             ) : (
               filtered.map(inv => (
@@ -1159,7 +1127,7 @@ export default function FacturesPage() {
                       onClick={() => setSelectedInvoice(inv)}
                     >
                       <Eye className="mr-2 h-4 w-4" />
-                      Détail
+                      DÃ©tail
                     </Button>
                   </div>
                 </article>
@@ -1196,7 +1164,7 @@ export default function FacturesPage() {
                 <div className="space-y-2 px-1">
                   {selectedInvoice.items.map((item, i) => (
                     <div key={i} className="flex items-center justify-between rounded-2xl border border-gray-50 bg-white p-3">
-                      <span className="text-sm font-bold text-gray-700">{item.product.name} <span className="ml-1 font-medium text-gray-400">× {item.quantity}</span></span>
+                      <span className="text-sm font-bold text-gray-700">{item.product.name} <span className="ml-1 font-medium text-gray-400">Ã— {item.quantity}</span></span>
                       <span className="font-bold text-gray-600">{formatDZD(item.priceBuy * item.quantity)}</span>
                     </div>
                   ))}
@@ -1261,7 +1229,7 @@ export default function FacturesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50/80 border-b border-gray-100">
             <tr>
-              <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">N° Facture</th>
+              <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">NÂ° Facture</th>
               <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">Fournisseur</th>
               <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">Date</th>
               <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">Type</th>
@@ -1274,7 +1242,7 @@ export default function FacturesPage() {
               <tr>
                 <td colSpan={6} className="text-center py-16 text-gray-400 font-medium">
                   <Search className="h-8 w-8 mx-auto mb-3 opacity-20" />
-                  Aucune facture trouvée
+                  Aucune facture trouvÃ©e
                 </td>
               </tr>
             ) : (
@@ -1306,7 +1274,7 @@ export default function FacturesPage() {
         </table>
       </div>
 
-      {/* Detail Modal — kept as dialog since it's just a viewer */}
+      {/* Detail Modal â€” kept as dialog since it's just a viewer */}
       <Dialog open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
         <DialogContent className="sm:max-w-lg bg-white border-0 shadow-xl rounded-2xl">
           <DialogHeader>
@@ -1335,7 +1303,7 @@ export default function FacturesPage() {
               <div className="space-y-2 px-1">
                 {selectedInvoice.items.map((item, i) => (
                   <div key={i} className="flex justify-between items-center bg-white p-2.5 border border-gray-50 rounded-xl">
-                    <span className="font-bold text-gray-700 text-sm">{item.product.name} <span className="text-gray-400 font-medium ml-1">× {item.quantity}</span></span>
+                    <span className="font-bold text-gray-700 text-sm">{item.product.name} <span className="text-gray-400 font-medium ml-1">Ã— {item.quantity}</span></span>
                     <span className="font-bold text-gray-600">{formatDZD(item.priceBuy * item.quantity)}</span>
                   </div>
                 ))}
