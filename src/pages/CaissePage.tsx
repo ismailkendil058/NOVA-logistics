@@ -74,6 +74,10 @@ export default function CaissePage() {
     const filtered = activeCategory ? customCards.filter(card => card.category === activeCategory) : customCards;
     return filtered.filter(card => card.kg - getCustomCardPendingKg(card.id) > 0);
   }, [customCards, activeCategory, getCustomCardPendingKg]);
+  const mobileCartCount = useMemo(() => {
+    const total = cart.reduce((sum, item) => sum + (item.weightKg ?? item.quantity), 0);
+    return Number.isInteger(total) ? String(total) : total.toFixed(1);
+  }, [cart]);
   const sectionOptions = [
     { id: "products", label: "Produits" },
     { id: "cart", label: "Panier" },
@@ -332,9 +336,30 @@ export default function CaissePage() {
           />
         </div>
 
+        {/* Category filters - mobile */}
+        <div className="mobile-scroll-x flex gap-2 overflow-x-auto pb-3 lg:hidden">
+          <div className="flex min-w-max gap-2">
+            {CATEGORIES.map(cat => {
+              const CategoryIcon = categoryIcons[cat.key];
+
+              return (
+                <button
+                  key={cat.key}
+                  onClick={() => setActiveCategory(activeCategory === cat.key ? null : cat.key)}
+                  className={`min-w-[108px] md:min-w-[116px] flex-shrink-0 py-4 md:min-h-[84px] rounded-lg transition-all flex flex-col items-center justify-center gap-1.5 shadow-sm border border-transparent ${categoryColors[cat.key]} ${activeCategory === cat.key ? 'ring-4 ring-black/10 scale-[0.98]' : 'hover:-translate-y-0.5'}`}
+                >
+                  <CategoryIcon className="hidden md:block h-7 w-7" strokeWidth={2.2} />
+                  <div className="text-[9px] md:text-[9px] opacity-80 uppercase tracking-wider">{cat.labelAr}</div>
+                  <span className="font-semibold text-xs md:text-sm tracking-wide text-center leading-tight max-w-[72px] whitespace-normal">{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Product Grid */}
         <div className="flex-1 overflow-auto rounded-lg mb-4">
-          <div className="grid grid-cols-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-1.5 md:gap-2.5 p-1">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-2 md:gap-2.5 p-1">
             {filteredProducts.map(product => {
               const Icon = categoryIcons[product.category] || Package;
               const showCustom = customizableCategories.has(product.category);
@@ -342,27 +367,27 @@ export default function CaissePage() {
                 <div
                   key={product.id}
                   onClick={() => addToCart(product)}
-                className="bg-white border border-gray-100 rounded-lg p-1.5 md:p-2.5 text-left hover:border-gray-300 hover:shadow-md transition-all duration-200 group relative flex flex-col min-h-[96px] md:min-h-[160px] items-center justify-between cursor-pointer"
+                className="bg-white border border-gray-100 rounded-lg p-2.5 md:p-2.5 text-left hover:border-gray-300 hover:shadow-md transition-all duration-200 group relative flex flex-col min-h-[172px] md:min-h-[160px] items-center justify-between cursor-pointer"
                 >
-                  <span className="absolute top-1.5 right-1.5 md:top-2 md:right-2 text-[8px] md:text-[10px] font-semibold bg-gray-100 text-gray-500 px-1 py-0.5 md:px-1.5 rounded">
+                  <span className="absolute top-2 right-2 text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
                     {product.stock}
                   </span>
                   {showCustom && (
                     <button
                       type="button"
                       onClick={e => { e.stopPropagation(); openCustomModal(product); }}
-                      className="absolute left-1.5 top-1.5 md:left-2 md:top-2 h-6 w-6 md:h-8 md:w-8 rounded-full bg-[#41b86d] text-white flex items-center justify-center shadow-md transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#41b86d]"
+                      className="absolute left-2 top-2 h-8 w-8 rounded-full bg-[#41b86d] text-white flex items-center justify-center shadow-md transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[#41b86d]"
                       disabled={product.stock <= 0}
                     >
-                      <Plus className="h-3 w-3 md:h-4 md:w-4" strokeWidth={2} />
+                      <Plus className="h-4 w-4" strokeWidth={2} />
                     </button>
                   )}
-                  <div className="flex-1 flex items-center justify-center pt-1.5 md:pt-2.5 pb-0.5 md:pb-1 w-full pointer-events-none">
-                    <Icon className="h-6 w-6 md:h-9 md:w-9 text-gray-400 group-hover:text-gray-600 group-hover:scale-110 transition-all drop-shadow-sm" strokeWidth={1.5} />
+                  <div className="flex-1 flex items-center justify-center pt-3 pb-1 w-full pointer-events-none">
+                    <Icon className="h-11 w-11 md:h-[54px] md:w-[54px] text-gray-400 group-hover:text-gray-600 group-hover:scale-110 transition-all drop-shadow-sm" strokeWidth={1.5} />
                   </div>
-                  <div className="w-full border-t border-gray-100 pt-1.5 md:pt-2 flex flex-col h-9 md:h-12 justify-end">
-                    <p className="text-[9px] md:text-[11px] font-medium text-gray-700 leading-tight mb-0.5 md:mb-1 line-clamp-2 text-center" title={product.name}>{product.name}</p>
-                    <p className="text-[10px] md:text-sm font-bold text-[#41b86d] text-center">{formatDZD(product.priceSale)}</p>
+                  <div className="w-full border-t border-gray-100 pt-2 flex flex-col h-12 justify-end">
+                    <p className="text-[11px] md:text-[11px] font-medium text-gray-700 leading-tight mb-1 line-clamp-2 text-center" title={product.name}>{product.name}</p>
+                    <p className="text-sm font-bold text-[#41b86d] text-center">{formatDZD(product.priceSale)}</p>
                   </div>
                 </div>
               );
@@ -395,26 +420,34 @@ export default function CaissePage() {
         </div>
 
         {/* Category filters */}
-        <div className="mobile-scroll-x flex gap-2 overflow-x-auto pt-2 border-t border-gray-200 pb-1">
+        <div className="mobile-scroll-x hidden gap-2 overflow-x-auto pt-2 border-t border-gray-200 pb-1 lg:flex">
           <div className="flex min-w-max gap-2 md:mx-auto">
-            {CATEGORIES.map(cat => (
-              <button
-                key={cat.key}
-                onClick={() => setActiveCategory(activeCategory === cat.key ? null : cat.key)}
-                className={`min-w-[108px] md:min-w-[116px] flex-shrink-0 py-4 md:min-h-[84px] rounded-lg transition-all flex flex-col items-center justify-center gap-1.5 shadow-sm border border-transparent ${categoryColors[cat.key]} ${activeCategory === cat.key ? 'ring-4 ring-black/10 scale-[0.98]' : 'hover:-translate-y-0.5'}`}
-              >
-                <div className="text-[9px] md:text-[9px] opacity-80 uppercase tracking-wider">{cat.labelAr}</div>
-                <span className="font-semibold text-xs md:text-sm tracking-wide text-center leading-tight max-w-[72px] whitespace-normal">{cat.label}</span>
-              </button>
-            ))}
+            {CATEGORIES.map(cat => {
+              const CategoryIcon = categoryIcons[cat.key];
+
+              return (
+                <button
+                  key={cat.key}
+                  onClick={() => setActiveCategory(activeCategory === cat.key ? null : cat.key)}
+                  className={`min-w-[108px] md:min-w-[116px] flex-shrink-0 py-4 md:min-h-[84px] rounded-lg transition-all flex flex-col items-center justify-center gap-1.5 shadow-sm border border-transparent ${categoryColors[cat.key]} ${activeCategory === cat.key ? 'ring-4 ring-black/10 scale-[0.98]' : 'hover:-translate-y-0.5'}`}
+                >
+                  <CategoryIcon className="hidden md:block h-7 w-7" strokeWidth={2.2} />
+                  <div className="text-[9px] md:text-[9px] opacity-80 uppercase tracking-wider">{cat.labelAr}</div>
+                  <span className="font-semibold text-xs md:text-sm tracking-wide text-center leading-tight max-w-[72px] whitespace-normal">{cat.label}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
       {/* Right panel — Cart */}
       <div className={`${mobileSection === "products" ? "hidden" : ""} flex w-full flex-col bg-white border-l border-gray-200 z-10 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.02)] lg:flex lg:w-[340px] xl:w-[360px]`}>
-        <div className="p-5 border-b border-gray-100 bg-white">
+        <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-white">
           <h3 className="text-xl font-bold tracking-tight text-gray-800">Panier</h3>
+          <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-[#41b86d] px-2 text-sm font-bold text-white lg:hidden">
+            {mobileCartCount}
+          </span>
         </div>
 
         {/* Cart items */}
