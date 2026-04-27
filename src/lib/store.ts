@@ -8,6 +8,7 @@ export interface Product {
   priceSale: number;
   priceBuy: number;
   stock: number;
+  minStock?: number;
   unit: "unité" | "kg";
   expiryDate?: string;
 }
@@ -53,10 +54,30 @@ export interface Bon {
   teinteEntries?: TeinteEntry[];
 }
 
+export interface Versement {
+  id: string;
+  amount: number;
+  date: string;
+}
+
+export interface Credit {
+  id: string;
+  clientName: string;
+  clientPhone: string;
+  items: CartItem[];
+  teinteAmount: number;
+  teinteEntries?: TeinteEntry[];
+  reduction: number;
+  total: number;
+  versements: Versement[];
+  date: string;
+}
+
 export interface Sale {
   id: string;
-  type: "direct" | "bon";
+  type: "direct" | "bon" | "credit";
   bonId?: string;
+  creditId?: string;
   items: CartItem[];
   teinteAmount: number;
   reduction: number;
@@ -105,14 +126,30 @@ function save<T>(key: string, data: T) {
 
 export function getProducts(): Product[] {
   const defaults = defaultProducts();
-  const stored = load<Product[]>("products", defaults);
+  let stored = load<Product[]>("products", defaults);
+
+  // Ensure all products have a minStock, default to 5
+  let updated = false;
+  stored = stored.map(p => {
+    if (p.minStock === undefined) {
+      updated = true;
+      return { ...p, minStock: 5 };
+    }
+    return p;
+  });
+
   const missingDefaults = defaults.filter(product => !stored.some(existing => existing.id === product.id));
 
-  if (!missingDefaults.length) return stored;
+  if (missingDefaults.length > 0) {
+    stored = [...stored, ...missingDefaults];
+    updated = true;
+  }
 
-  const mergedProducts = [...stored, ...missingDefaults];
-  saveProducts(mergedProducts);
-  return mergedProducts;
+  if (updated) {
+    saveProducts(stored);
+  }
+
+  return stored;
 }
 
 export function saveProducts(products: Product[]) {
@@ -163,6 +200,35 @@ export function addSale(sale: Sale) {
   const sales = getSales();
   sales.unshift(sale);
   saveSales(sales);
+}
+
+export function getCredits(): Credit[] {
+  return load<Credit[]>("credits", []);
+}
+
+export function saveCredits(credits: Credit[]) {
+  save("credits", credits);
+}
+
+export function addCredit(credit: Credit) {
+  const credits = getCredits();
+  credits.unshift(credit);
+  saveCredits(credits);
+}
+
+export function updateCredit(updated: Credit) {
+  const credits = getCredits();
+  const index = credits.findIndex(c => c.id === updated.id);
+  if (index >= 0) {
+    credits[index] = updated;
+    saveCredits(credits);
+  }
+}
+
+export function deleteCredit(id: string) {
+  const credits = getCredits();
+  const filtered = credits.filter(c => c.id !== id);
+  saveCredits(filtered);
 }
 
 export function getCustomCards(): CustomSaleCard[] {

@@ -1,12 +1,12 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Search, Plus, Minus, Trash2, Paintbrush, Percent, PaintBucket, PaintRoller, Pipette, PaintbrushVertical, Frame, Droplets, Wrench, Package } from "lucide-react";
+import { Search, Plus, Minus, Trash2, Paintbrush, Percent, PaintBucket, PaintRoller, Pipette, PaintbrushVertical, Frame, Droplets, Wrench, Package, ShoppingCart, FileText, Wallet, ArrowUpRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   getProducts, CartItem, Product, CategoryType, CATEGORIES,
   formatDZD, generateId, addSale, addBon, updateProductStock, TeinteEntry,
-  getCustomCards, saveCustomCards, CustomSaleCard
+  getCustomCards, saveCustomCards, CustomSaleCard, addCredit, getCredits, updateCredit
 } from "@/lib/store";
 
 const categoryIcons: Record<CategoryType, React.ElementType> = {
@@ -49,6 +49,8 @@ export default function CaissePage() {
   const [mobileSection, setMobileSection] = useState<"products" | "cart">("products");
   const [tempTeinteEntries, setTempTeinteEntries] = useState<TempTeinteEntry[]>([createTempTeinteEntry()]);
   const [tempReduction, setTempReduction] = useState("");
+  const [paidAmount, setPaidAmount] = useState("");
+  const [checkoutMode, setCheckoutMode] = useState<"choice" | "bon" | "credit">("choice");
   const previewTeinteAmount = tempTeinteEntries.reduce((sum, entry) => {
     const unitPrice = Number(entry.unitPrice) || 0;
     const kg = Number(entry.kg) || 0;
@@ -56,6 +58,22 @@ export default function CaissePage() {
   }, 0);
   const [customCards, setCustomCards] = useState<CustomSaleCard[]>(() => getCustomCards());
   const [showCustomModal, setShowCustomModal] = useState(false);
+  const [allCredits, setAllCredits] = useState(() => getCredits());
+  const uniqueClients = useMemo(() => {
+    const clients: Record<string, { name: string; phone: string }> = {};
+    allCredits.forEach(c => {
+      clients[c.clientPhone] = { name: c.clientName, phone: c.clientPhone };
+    });
+    return Object.values(clients);
+  }, [allCredits]);
+
+  const clientSuggestions = useMemo(() => {
+    if (!clientName && !clientPhone) return [];
+    return uniqueClients.filter(c =>
+      (clientName && c.name.toLowerCase().includes(clientName.toLowerCase())) ||
+      (clientPhone && c.phone.includes(clientPhone))
+    ).slice(0, 5);
+  }, [uniqueClients, clientName, clientPhone]);
   const [customModalProduct, setCustomModalProduct] = useState<Product | null>(null);
   const [customModalKg, setCustomModalKg] = useState("");
   const [customModalUnitPrice, setCustomModalUnitPrice] = useState("");
@@ -163,7 +181,6 @@ export default function CaissePage() {
     if (!kg || !unitPrice) return;
     const customPurchaseCostPerKg = getCustomPurchaseCostPerKg(customModalProduct, kg);
 
-    addCustomCartItem(customModalProduct, kg, unitPrice, customPurchaseCostPerKg);
     addCustomCardEntry(customModalProduct, kg, unitPrice, customPurchaseCostPerKg);
     closeCustomModal();
   };
@@ -266,7 +283,7 @@ export default function CaissePage() {
     });
   };
 
-  const handleCheckout = (type: 'direct' | 'bon') => {
+  const handleCheckout = (type: 'direct' | 'bon' | 'credit') => {
     const saleId = generateId();
     cart.forEach(item => {
       const productId = item.customBaseProductId ?? item.product.id;
@@ -276,11 +293,46 @@ export default function CaissePage() {
 
     if (type === 'direct') {
       addSale({ id: saleId, type: 'direct', items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
-    } else {
+    } else if (type === 'bon') {
       const bonId = generateId();
       const bonNumber = `BON-${Date.now().toString().slice(-6)}`;
       addBon({ id: bonId, number: bonNumber, clientName, clientPhone, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
       addSale({ id: saleId, type: 'bon', bonId, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
+    } else {
+      const existingCredits = getCredits();
+      const existingCredit = existingCredits.find(c => c.clientPhone === clientPhone);
+      const initialPaid = Number(paidAmount) || 0;
+      const saleId = generateId();
+
+      if (existingCredit) {
+        const updated = {
+          ...existingCredit,
+          items: [...(existingCredit.items || []), ...cart],
+          total: existingCredit.total + total,
+          teinteAmount: (existingCredit.teinteAmount || 0) + teinteAmount,
+          reduction: (existingCredit.reduction || 0) + reduction,
+          versements: initialPaid > 0
+            ? [...(existingCredit.versements || []), { id: generateId(), amount: initialPaid, date: new Date().toISOString() }]
+            : (existingCredit.versements || [])
+        };
+        updateCredit(updated);
+        addSale({ id: saleId, type: 'credit', creditId: existingCredit.id, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
+      } else {
+        const creditId = generateId();
+        addCredit({
+          id: creditId,
+          clientName,
+          clientPhone,
+          items: [...cart],
+          teinteAmount,
+          teinteEntries,
+          reduction,
+          total,
+          versements: initialPaid > 0 ? [{ id: generateId(), amount: initialPaid, date: new Date().toISOString() }] : [],
+          date: new Date().toISOString()
+        });
+        addSale({ id: saleId, type: 'credit', creditId, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
+      }
     }
 
     setCart([]);
@@ -289,8 +341,11 @@ export default function CaissePage() {
     setReduction(0);
     setClientName("");
     setClientPhone("");
+    setPaidAmount("");
+    setAllCredits(getCredits());
     setProducts(getProducts());
     setShowCheckout(false);
+    setCheckoutMode("choice");
   };
 
   return (
@@ -367,7 +422,7 @@ export default function CaissePage() {
                 <div
                   key={product.id}
                   onClick={() => addToCart(product)}
-                className="bg-white border border-gray-100 rounded-lg p-2.5 md:p-2.5 text-left hover:border-gray-300 hover:shadow-md transition-all duration-200 group relative flex flex-col min-h-[172px] md:min-h-[160px] items-center justify-between cursor-pointer"
+                  className="bg-white border border-gray-100 rounded-lg p-2.5 md:p-2.5 text-left hover:border-gray-300 hover:shadow-md transition-all duration-200 group relative flex flex-col min-h-[172px] md:min-h-[160px] items-center justify-between cursor-pointer"
                 >
                   <span className="absolute top-2 right-2 text-[10px] font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
                     {product.stock}
@@ -563,31 +618,112 @@ export default function CaissePage() {
       </div>
 
       {/* Checkout modal */}
-      <Dialog open={showCheckout} onOpenChange={setShowCheckout}>
-        <DialogContent className="sm:max-w-md bg-white border-0 shadow-xl">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold border-b border-gray-100 pb-3">Encaissement</DialogTitle>
+      <Dialog open={showCheckout} onOpenChange={(open) => { setShowCheckout(open); if (!open) setCheckoutMode("choice"); }}>
+        <DialogContent className="sm:max-w-md bg-white border-0 shadow-xl p-0 overflow-hidden">
+          <DialogHeader className="p-6 pb-0">
+            <DialogTitle className="text-xl font-bold border-b border-gray-100 pb-3 flex items-center justify-between">
+              {checkoutMode === "choice" && "Encaissement"}
+              {checkoutMode === "bon" && "Créer un Bon"}
+              {checkoutMode === "credit" && "Vente à Crédit"}
+              {checkoutMode !== "choice" && (
+                <button
+                  onClick={() => setCheckoutMode("choice")}
+                  className="text-xs font-bold text-[#628b9a] hover:underline"
+                >
+                  Retour
+                </button>
+              )}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-6 pt-4">
-            <div className="bg-[#f0fbf4] border border-[#a3e4be] p-6 rounded-xl">
-              <p className="text-center text-3xl font-black text-[#39a05f]">{formatDZD(total)}</p>
+
+          <div className="p-6 space-y-6">
+            <div className={`bg-[#f0fbf4] border border-[#a3e4be] p-6 rounded-xl ${checkoutMode !== "choice" ? "py-3 px-4" : ""}`}>
+              <p className={`text-center font-black text-[#39a05f] ${checkoutMode === "choice" ? "text-3xl" : "text-xl"}`}>
+                {formatDZD(total)}
+              </p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Button variant="outline" className="h-20 flex-col gap-2 rounded-xl border-gray-200 hover:border-[#41b86d] hover:bg-[#41b86d]/5 transition-all" onClick={() => handleCheckout('direct')}>
-                <span className="text-sm font-bold text-gray-700">Vente Directe</span>
-              </Button>
-              <Button variant="outline" className="h-20 flex-col gap-2 rounded-xl border-[#628b9a] text-[#628b9a] hover:bg-[#628b9a]/5 transition-all" onClick={() => { }}>
-                <span className="text-sm font-bold">BON</span>
-              </Button>
-            </div>
-            <div className="space-y-3 pt-4 border-t border-gray-100">
-              <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Informations Client (Bon)</h4>
-              <Input placeholder="Nom complet du client" className="bg-gray-50 border-gray-200 h-11" value={clientName} onChange={e => setClientName(e.target.value)} />
-              <Input placeholder="Numéro de téléphone" className="bg-gray-50 border-gray-200 h-11" value={clientPhone} onChange={e => setClientPhone(e.target.value)} />
-              <Button className="w-full h-12 mt-2 bg-[#628b9a] hover:bg-[#527b8a] text-white font-bold rounded-lg" onClick={() => handleCheckout('bon')} disabled={!clientName}>
-                Confirmer le Bon
-              </Button>
-            </div>
+
+            {checkoutMode === "choice" && (
+              <div className="grid grid-cols-3 gap-2">
+                <Button variant="outline" className="h-24 flex-col gap-2 rounded-xl border-gray-200 hover:border-[#41b86d] hover:bg-[#41b86d]/5 transition-all text-xs" onClick={() => handleCheckout('direct')}>
+                  <div className="bg-[#41b86d]/10 p-2 rounded-lg"><ShoppingCart className="h-5 w-5 text-[#41b86d]" /></div>
+                  <span className="font-bold text-gray-700">Vente Directe</span>
+                </Button>
+                <Button variant="outline" className="h-24 flex-col gap-2 rounded-xl border-[#628b9a]/30 hover:border-[#628b9a] hover:bg-[#628b9a]/5 transition-all text-xs" onClick={() => setCheckoutMode("bon")}>
+                  <div className="bg-[#628b9a]/10 p-2 rounded-lg"><FileText className="h-5 w-5 text-[#628b9a]" /></div>
+                  <span className="font-bold text-gray-700">BON</span>
+                </Button>
+                <Button variant="outline" className="h-24 flex-col gap-2 rounded-xl border-orange-200 hover:border-orange-400 hover:bg-orange-50 transition-all text-xs" onClick={() => setCheckoutMode("credit")}>
+                  <div className="bg-orange-100 p-2 rounded-lg"><Wallet className="h-5 w-5 text-orange-500" /></div>
+                  <span className="font-bold text-gray-700">CRÉDIT</span>
+                </Button>
+              </div>
+            )}
+
+            {checkoutMode === "bon" && (
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">Informations Client</h4>
+                  <Input placeholder="Nom complet du client" className="bg-gray-50 border-gray-200 h-12 rounded-xl" value={clientName} onChange={e => setClientName(e.target.value)} />
+                  <Input placeholder="Numéro de téléphone" className="bg-gray-50 border-gray-200 h-12 rounded-xl" value={clientPhone} onChange={e => setClientPhone(e.target.value)} />
+                </div>
+                <Button
+                  className="w-full h-14 bg-[#628b9a] hover:bg-[#527b8a] text-white font-bold rounded-xl text-lg shadow-lg shadow-gray-200 mt-4"
+                  onClick={() => handleCheckout('bon')}
+                  disabled={!clientName}
+                >
+                  Confirmer le Bon
+                </Button>
+              </div>
+            )}
+
+            {checkoutMode === "credit" && (
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="space-y-3 relative">
+                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider pl-1">Informations Client</h4>
+                  <Input placeholder="Nom complet du client" className="bg-gray-50 border-gray-200 h-12 rounded-xl transition-all focus:bg-white" value={clientName} onChange={e => setClientName(e.target.value)} />
+                  <Input placeholder="Numéro de téléphone" className="bg-gray-50 border-gray-200 h-12 rounded-xl transition-all focus:bg-white" value={clientPhone} onChange={e => setClientPhone(e.target.value)} />
+
+                  {clientSuggestions.length > 0 && !(clientSuggestions.length === 1 && clientSuggestions[0].name === clientName && clientSuggestions[0].phone === clientPhone) && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-100 rounded-xl shadow-xl z-50 overflow-hidden divide-y divide-gray-50 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="px-3 py-1.5 bg-gray-50/50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Clients Existants
+                      </div>
+                      {clientSuggestions.map((c, i) => (
+                        <button
+                          key={i}
+                          className="w-full px-4 py-3 text-left hover:bg-[#41b86d]/5 flex items-center justify-between group transition-colors"
+                          onClick={() => { setClientName(c.name); setClientPhone(c.phone); }}
+                        >
+                          <div>
+                            <p className="text-sm font-bold text-gray-800 group-hover:text-[#41b86d]">{c.name}</p>
+                            <p className="text-xs text-gray-500">{c.phone}</p>
+                          </div>
+                          <ArrowUpRight className="h-4 w-4 text-gray-300 group-hover:text-[#41b86d]" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="bg-orange-50 p-4 rounded-xl border border-orange-100 space-y-2 mt-4">
+                  <label className="text-[10px] font-bold text-orange-600 uppercase tracking-widest pl-1">Versement Initial (Facultatif)</label>
+                  <Input
+                    placeholder="Montant versé (DZD)"
+                    className="bg-white border-orange-200 h-12 rounded-lg font-bold text-lg text-orange-700 focus:ring-orange-500"
+                    value={paidAmount}
+                    onChange={e => setPaidAmount(e.target.value)}
+                    type="number"
+                  />
+                </div>
+                <Button
+                  className="w-full h-14 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl text-lg shadow-lg shadow-orange-100 mt-4 transition-all hover:-translate-y-0.5 active:translate-y-0"
+                  onClick={() => handleCheckout('credit')}
+                  disabled={!clientName}
+                >
+                  Confirmer le Crédit
+                </Button>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
@@ -736,7 +872,7 @@ export default function CaissePage() {
             onClick={handleCustomSaleConfirm}
             className="w-full h-11 mt-2 bg-[#41b86d] hover:bg-[#378f63] text-white font-bold"
           >
-            Ajouter au panier
+            Ajouter
           </Button>
         </DialogContent>
       </Dialog>

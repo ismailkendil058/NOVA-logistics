@@ -1,9 +1,10 @@
-import { ShoppingCart, FileText, Package, BarChart3, Receipt } from "lucide-react";
+import { ShoppingCart, FileText, Package, BarChart3, Receipt, Wallet } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 
 const navItems = [
   { title: "Caisse", url: "/", icon: ShoppingCart },
+  { title: "Crédit", url: "/credit", icon: Wallet },
   { title: "Bons", url: "/bons", icon: FileText },
   { title: "Factures", url: "/factures", icon: Receipt },
   { title: "Inventaire", url: "/inventaire", icon: Package },
@@ -35,8 +36,8 @@ export function AppSidebar() {
               to={item.url}
               end
               className={`flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm transition-all duration-200 group font-bold ${isActive
-                  ? "bg-[#41b86d] text-white shadow-[0_4px_14px_0_rgba(65,184,109,0.39)] hover:-translate-y-0.5"
-                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                ? "bg-[#41b86d] text-white shadow-[0_4px_14px_0_rgba(65,184,109,0.39)] hover:-translate-y-0.5"
+                : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
                 }`}
               activeClassName=""
             >

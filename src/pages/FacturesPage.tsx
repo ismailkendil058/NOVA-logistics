@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Plus, RotateCcw, Search, Eye, ArrowLeft, Package, PackagePlus, X } from "lucide-react";
+import { Plus, RotateCcw, Search, Eye, ArrowLeft, Package, PackagePlus, X, Pencil } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,10 +11,9 @@ import {
 } from "@/lib/store";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
-type View = "list" | "add" | "return";
+type View = "list" | "add" | "return" | "edit";
 type InvoiceFormItem = {
   productId: string;
-  isNew: boolean;
   newName: string;
   newCategory: string;
   quantity: number;
@@ -25,7 +24,6 @@ type InvoiceFormItem = {
 
 const createInvoiceFormItem = (): InvoiceFormItem => ({
   productId: "",
-  isNew: false,
   newName: "",
   newCategory: "satine",
   quantity: 1,
@@ -42,19 +40,30 @@ export default function FacturesPage() {
   const [dateFilter, setDateFilter] = useState("");
   const [view, setView] = useState<View>("list");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
 
   // Add form state
-  const [supplierId, setSupplierId] = useState("");
   const [newSupplier, setNewSupplier] = useState({ name: "", phone: "", address: "" });
-  const [isNewSupplier, setIsNewSupplier] = useState(false);
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceFormItem[]>([]);
   const [draftInvoiceItem, setDraftInvoiceItem] = useState<InvoiceFormItem>(createInvoiceFormItem());
+  const [showSupplierSuggestions, setShowSupplierSuggestions] = useState(false);
+  const [showProductSuggestions, setShowProductSuggestions] = useState<number | "draft" | null>(null);
 
   // Return form state
   const [returnInvoiceId, setReturnInvoiceId] = useState("");
   const [returnItems, setReturnItems] = useState<{ idx: number; quantity: number }[]>([]);
   const isMobile = useIsMobile();
+
+  const supplierSuggestions = useMemo(() => {
+    const query = newSupplier.name.trim().toLowerCase();
+    if (!query || !showSupplierSuggestions) return [];
+    // Only show suggestions if the name doesn't match an existing one exactly (to hide after selection)
+    const exactMatch = suppliers.find(s => s.name.toLowerCase() === query);
+    if (exactMatch && query === exactMatch.name.toLowerCase()) return [];
+
+    return suppliers.filter(s => s.name.toLowerCase().includes(query)).slice(0, 5);
+  }, [suppliers, newSupplier.name, showSupplierSuggestions]);
 
   const filtered = useMemo(() => {
     return invoices.filter(inv => {
@@ -68,19 +77,16 @@ export default function FacturesPage() {
     setDraftInvoiceItem(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleDraftInvoiceMode = (isNew: boolean) => {
-    setDraftInvoiceItem(prev => ({
-      ...prev,
-      isNew,
-      productId: isNew ? "" : prev.productId,
-      newName: isNew ? prev.newName : "",
-    }));
+  const getProductSuggestions = (query: string) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    return products.filter(p => p.name.toLowerCase().includes(q)).slice(0, 5);
   };
 
   const canAddDraftInvoiceItem = draftInvoiceItem.quantity > 0
     && draftInvoiceItem.priceBuy > 0
     && draftInvoiceItem.priceSale > 0
-    && (draftInvoiceItem.isNew ? draftInvoiceItem.newName.trim().length > 0 : draftInvoiceItem.productId.length > 0);
+    && draftInvoiceItem.newName.trim().length > 0;
   const addInvoiceItem = () => {
     if (!canAddDraftInvoiceItem) return;
     setInvoiceItems(prev => [...prev, { ...draftInvoiceItem, newName: draftInvoiceItem.newName.trim() }]);
@@ -92,20 +98,20 @@ export default function FacturesPage() {
   };
 
   const getInvoiceItemLabel = (item: InvoiceFormItem) => {
-    if (item.isNew) return item.newName;
-    return products.find(product => product.id === item.productId)?.name || "Produit";
+    return item.newName || "Produit";
   };
 
   const handleSubmitInvoice = () => {
+    const existingSupplier = suppliers.find(s => s.name.toLowerCase() === newSupplier.name.trim().toLowerCase());
     let supplier: Supplier;
-    if (isNewSupplier) {
-      supplier = { id: generateId(), ...newSupplier };
-      const updatedSuppliers = [...suppliers, supplier];
-      saveSuppliers(updatedSuppliers);
-      setSuppliers(updatedSuppliers);
+
+    if (existingSupplier) {
+      supplier = existingSupplier;
     } else {
-      supplier = suppliers.find(s => s.id === supplierId)!;
-      if (!supplier) return;
+      supplier = { id: generateId(), ...newSupplier, name: newSupplier.name.trim() };
+      const updatedS = [...suppliers, supplier];
+      saveSuppliers(updatedS);
+      setSuppliers(updatedS);
     }
 
     const items: InvoiceItem[] = [];
@@ -113,15 +119,10 @@ export default function FacturesPage() {
 
     for (const item of invoiceItems) {
       let product: Product;
-      if (item.isNew) {
-        product = {
-          id: generateId(), name: item.newName, nameAr: "", category: item.newCategory as any,
-          priceSale: item.priceSale, priceBuy: item.priceBuy, stock: item.quantity, unit: "unitÃ©", expiryDate: item.expiryDate || undefined
-        };
-        updatedProducts.push(product);
-      } else {
-        const idx = updatedProducts.findIndex(p => p.id === item.productId);
-        if (idx < 0) continue;
+      const existingProduct = products.find(p => p.name.toLowerCase() === item.newName.trim().toLowerCase());
+
+      if (existingProduct) {
+        const idx = updatedProducts.findIndex(p => p.id === existingProduct.id);
         updatedProducts[idx] = {
           ...updatedProducts[idx],
           stock: updatedProducts[idx].stock + item.quantity,
@@ -130,6 +131,12 @@ export default function FacturesPage() {
           expiryDate: item.expiryDate || updatedProducts[idx].expiryDate,
         };
         product = updatedProducts[idx];
+      } else {
+        product = {
+          id: generateId(), name: item.newName.trim(), nameAr: "", category: item.newCategory as any,
+          priceSale: item.priceSale, priceBuy: item.priceBuy, stock: item.quantity, unit: "unité", expiryDate: item.expiryDate || undefined
+        };
+        updatedProducts.push(product);
       }
       items.push({ product, quantity: item.quantity, priceBuy: item.priceBuy, priceSale: item.priceSale, expiryDate: item.expiryDate });
     }
@@ -152,6 +159,98 @@ export default function FacturesPage() {
     setInvoices(updated);
     resetAddForm();
     setView("list");
+  };
+
+  const handleUpdateInvoice = () => {
+    if (!editingInvoiceId) return;
+    const oldInvoice = invoices.find(i => i.id === editingInvoiceId);
+    if (!oldInvoice) return;
+
+    const existingSupplier = suppliers.find(s => s.name.toLowerCase() === newSupplier.name.trim().toLowerCase());
+    let supplier: Supplier;
+
+    if (existingSupplier) {
+      supplier = existingSupplier;
+    } else {
+      supplier = { id: generateId(), ...newSupplier, name: newSupplier.name.trim() };
+      const updatedS = [...suppliers, supplier];
+      saveSuppliers(updatedS);
+      setSuppliers(updatedS);
+    }
+
+    const updatedProducts = [...products];
+
+    // 1. Revert old invoice stock changes
+    for (const oldItem of oldInvoice.items) {
+      const pIdx = updatedProducts.findIndex(p => p.id === oldItem.product.id);
+      if (pIdx >= 0) {
+        updatedProducts[pIdx] = {
+          ...updatedProducts[pIdx],
+          stock: updatedProducts[pIdx].stock - oldItem.quantity
+        };
+      }
+    }
+
+    // 2. Apply new invoice stock changes and update items
+    const newItems: InvoiceItem[] = [];
+    for (const item of invoiceItems) {
+      let product: Product;
+      const existingProduct = updatedProducts.find(p => p.name.toLowerCase() === item.newName.trim().toLowerCase());
+
+      if (existingProduct) {
+        const pIdx = updatedProducts.findIndex(p => p.id === existingProduct.id);
+        updatedProducts[pIdx] = {
+          ...updatedProducts[pIdx],
+          stock: updatedProducts[pIdx].stock + item.quantity,
+          priceBuy: item.priceBuy,
+          priceSale: item.priceSale,
+          expiryDate: item.expiryDate || updatedProducts[pIdx].expiryDate,
+        };
+        product = updatedProducts[pIdx];
+      } else {
+        product = {
+          id: generateId(), name: item.newName.trim(), nameAr: "", category: item.newCategory as any,
+          priceSale: item.priceSale, priceBuy: item.priceBuy, stock: item.quantity, unit: "unité", expiryDate: item.expiryDate || undefined
+        };
+        updatedProducts.push(product);
+      }
+      newItems.push({ product, quantity: item.quantity, priceBuy: item.priceBuy, priceSale: item.priceSale, expiryDate: item.expiryDate });
+    }
+
+    saveProducts(updatedProducts);
+    setProducts(updatedProducts);
+
+    const updatedInvoice: Invoice = {
+      ...oldInvoice,
+      supplier,
+      items: newItems,
+      total: newItems.reduce((s, i) => s + i.priceBuy * i.quantity, 0),
+      date: invoiceDate,
+    };
+
+    const updatedInvoices = invoices.map(inv => inv.id === editingInvoiceId ? updatedInvoice : inv);
+    saveInvoices(updatedInvoices);
+    setInvoices(updatedInvoices);
+    resetAddForm();
+    setEditingInvoiceId(null);
+    setView("list");
+  };
+
+  const startEditing = (invoice: Invoice) => {
+    setEditingInvoiceId(invoice.id);
+    setNewSupplier({ name: invoice.supplier.name, phone: invoice.supplier.phone || "", address: invoice.supplier.address || "" });
+    setShowSupplierSuggestions(false);
+    setInvoiceDate(invoice.date);
+    setInvoiceItems(invoice.items.map(item => ({
+      productId: item.product.id,
+      newName: item.product.name,
+      newCategory: item.product.category,
+      quantity: item.quantity,
+      priceBuy: item.priceBuy,
+      priceSale: item.priceSale,
+      expiryDate: item.expiryDate || "",
+    })));
+    setView("edit");
   };
 
   const handleReturn = () => {
@@ -186,9 +285,8 @@ export default function FacturesPage() {
   };
 
   const resetAddForm = () => {
-    setSupplierId("");
     setNewSupplier({ name: "", phone: "", address: "" });
-    setIsNewSupplier(false);
+    setShowSupplierSuggestions(false);
     setInvoiceItems([]);
     setDraftInvoiceItem(createInvoiceFormItem());
     setInvoiceDate(new Date().toISOString().split("T")[0]);
@@ -201,8 +299,8 @@ export default function FacturesPage() {
     return s + (item ? item.priceBuy * ri.quantity : 0);
   }, 0);
 
-  // â”€â”€â”€ ADD FACTURE VIEW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-  if (view === "add") {
+  // ─── ADD / EDIT FACTURE VIEW ───────────────────────────────────────────────────────────
+  if (view === "add" || view === "edit") {
     if (isMobile) {
       return (
         <div className="min-h-screen bg-[#eef5f4] px-4 pb-6 pt-5 text-gray-800">
@@ -215,44 +313,60 @@ export default function FacturesPage() {
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">Factures</p>
-              <h2 className="mt-3 text-3xl font-black tracking-tight">Nouvel achat</h2>
-              <p className="mt-1 text-sm text-white/70">CrÃ©ez une facture fournisseur pensÃ©e pour le mobile.</p>
+              <h2 className="mt-3 text-3xl font-black tracking-tight">{view === "edit" ? "Modifier l'achat" : "Nouvel achat"}</h2>
+              <p className="mt-1 text-sm text-white/70">
+                {view === "edit" ? "Modifiez les informations de cette facture." : "Créez une facture fournisseur pensée pour le mobile."}
+              </p>
             </div>
 
             <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
-              <div className="flex rounded-2xl bg-[#eef5f4] p-1">
-                <button
-                  onClick={() => setIsNewSupplier(false)}
-                  className={`flex-1 rounded-2xl px-3 py-2 text-sm font-bold ${!isNewSupplier ? "bg-white text-[#243740] shadow-sm" : "text-gray-500"}`}
-                >
-                  Existant
-                </button>
-                <button
-                  onClick={() => setIsNewSupplier(true)}
-                  className={`flex-1 rounded-2xl px-3 py-2 text-sm font-bold ${isNewSupplier ? "bg-white text-[#243740] shadow-sm" : "text-gray-500"}`}
-                >
-                  Nouveau
-                </button>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                {isNewSupplier ? (
-                  <>
-                    <Input placeholder="Nom du fournisseur" value={newSupplier.name} onChange={e => setNewSupplier(p => ({ ...p, name: e.target.value }))} className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]" />
-                    <Input placeholder="TÃ©lÃ©phone" value={newSupplier.phone} onChange={e => setNewSupplier(p => ({ ...p, phone: e.target.value }))} className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]" />
-                    <Input placeholder="Adresse" value={newSupplier.address} onChange={e => setNewSupplier(p => ({ ...p, address: e.target.value }))} className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]" />
-                  </>
-                ) : (
-                  <Select value={supplierId} onValueChange={setSupplierId}>
-                    <SelectTrigger className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa] text-sm">
-                      <SelectValue placeholder="Choisir un fournisseur..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )}
-                <Input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]" />
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-black text-[#243740]">Fournisseur</p>
+                  <div className="relative">
+                    <Input
+                      placeholder="Nom du fournisseur"
+                      value={newSupplier.name}
+                      onChange={e => {
+                        setNewSupplier(p => ({ ...p, name: e.target.value }));
+                        setShowSupplierSuggestions(true);
+                      }}
+                      className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa] text-sm font-medium"
+                    />
+                    {supplierSuggestions.length > 0 && (
+                      <div className="absolute top-14 left-0 right-0 bg-white rounded-2xl shadow-xl border border-gray-100 z-50 py-2 divide-y divide-gray-50 overflow-hidden">
+                        {supplierSuggestions.map(s => (
+                          <button
+                            key={s.id}
+                            onClick={() => {
+                              setNewSupplier({ name: s.name, phone: s.phone || "", address: s.address || "" });
+                              setShowSupplierSuggestions(false);
+                            }}
+                            className="w-full text-left px-4 py-3 hover:bg-[#f7fbfa] transition-colors flex items-center justify-between"
+                          >
+                            <span className="font-bold text-gray-700">{s.name}</span>
+                            <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Existant</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    placeholder="Téléphone"
+                    value={newSupplier.phone}
+                    onChange={e => setNewSupplier(p => ({ ...p, phone: e.target.value }))}
+                    className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]"
+                  />
+                  <Input
+                    placeholder="Date"
+                    type="date"
+                    value={invoiceDate}
+                    onChange={e => setInvoiceDate(e.target.value)}
+                    className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa]"
+                  />
+                </div>
               </div>
             </div>
 
@@ -271,54 +385,65 @@ export default function FacturesPage() {
               <div className="mt-4 space-y-4">
                 <div className="rounded-[1.5rem] border border-gray-100 bg-[#f7fbfa] p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-black text-[#243740]">Nouveau produit</p>
-                    <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#628b9a]">Toujours visible</span>
-                  </div>
-                  <div className="mt-3 flex rounded-2xl bg-white p-1">
-                    <button
-                      onClick={() => handleDraftInvoiceMode(false)}
-                      className={`flex-1 rounded-2xl px-3 py-2 text-xs font-bold ${!draftInvoiceItem.isNew ? "bg-[#41b86d] text-white" : "text-gray-500"}`}
-                    >
-                      Existant
-                    </button>
-                    <button
-                      onClick={() => handleDraftInvoiceMode(true)}
-                      className={`flex-1 rounded-2xl px-3 py-2 text-xs font-bold ${draftInvoiceItem.isNew ? "bg-[#41b86d] text-white" : "text-gray-500"}`}
-                    >
-                      Nouveau
-                    </button>
+                    <p className="text-sm font-black text-[#243740]">Produit</p>
                   </div>
                   <div className="mt-3 space-y-3">
-                    {draftInvoiceItem.isNew ? (
-                      <>
-                        <Input placeholder="Nom du produit" value={draftInvoiceItem.newName} onChange={e => updateDraftInvoiceItem("newName", e.target.value)} className="h-12 rounded-2xl border-gray-200 bg-white" />
-                        <Select value={draftInvoiceItem.newCategory} onValueChange={value => updateDraftInvoiceItem("newCategory", value)}>
-                          <SelectTrigger className="h-12 rounded-2xl border-gray-200 bg-white text-sm">
-                            <SelectValue />
-                          </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="satine">SatinÃƒÂ©</SelectItem>
-                              <SelectItem value="enduit">Enduit</SelectItem>
-                              <SelectItem value="vinyle">Vinyle</SelectItem>
-                              <SelectItem value="laque">Laque</SelectItem>
-                              <SelectItem value="decor">DÃƒÂ©cor</SelectItem>
-                              <SelectItem value="fixateur">Fixateur</SelectItem>
-                              <SelectItem value="accessoires">Accessoires</SelectItem>
-                            </SelectContent>
-                        </Select>
-                      </>
-                    ) : (
-                      <Select value={draftInvoiceItem.productId} onValueChange={value => updateDraftInvoiceItem("productId", value)}>
-                        <SelectTrigger className="h-12 rounded-2xl border-gray-200 bg-white text-sm">
-                          <SelectValue placeholder="Choisir un produit..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {products.map(product => <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    )}
+                    <div className="relative">
+                      <Input
+                        placeholder="Rechercher ou taper le nom..."
+                        value={draftInvoiceItem.newName}
+                        onChange={e => {
+                          updateDraftInvoiceItem("newName", e.target.value);
+                          setShowProductSuggestions("draft");
+                        }}
+                        className="h-12 rounded-2xl border-gray-200 bg-white text-sm font-medium"
+                      />
+                      {showProductSuggestions === "draft" && getProductSuggestions(draftInvoiceItem.newName).length > 0 && (
+                        <div className="absolute top-14 left-0 right-0 z-50 divide-y divide-gray-50 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
+                          {getProductSuggestions(draftInvoiceItem.newName).map(p => (
+                            <button
+                              key={p.id}
+                              onClick={() => {
+                                setDraftInvoiceItem(prev => ({
+                                  ...prev,
+                                  productId: p.id,
+                                  newName: p.name,
+                                  newCategory: p.category,
+                                  priceBuy: p.priceBuy || prev.priceBuy,
+                                  priceSale: p.priceSale || prev.priceSale,
+                                  expiryDate: p.expiryDate || prev.expiryDate || ""
+                                }));
+                                setShowProductSuggestions(null);
+                              }}
+                              className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-[#f7fbfa]"
+                            >
+                              <div>
+                                <p className="text-sm font-bold text-gray-700">{p.name}</p>
+                                <p className="text-[10px] font-medium text-gray-400 capitalize">{p.category}</p>
+                              </div>
+                              <span className="rounded-full bg-[#eef5f4] px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-[#628b9a]">Existant</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <Select value={draftInvoiceItem.newCategory} onValueChange={v => updateDraftInvoiceItem("newCategory", v)}>
+                      <SelectTrigger className="h-12 rounded-2xl border-gray-200 bg-white text-sm">
+                        <SelectValue placeholder="Catégorie..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="satine">Satiné</SelectItem>
+                        <SelectItem value="enduit">Enduit</SelectItem>
+                        <SelectItem value="vinyle">Vinyle</SelectItem>
+                        <SelectItem value="laque">Laque</SelectItem>
+                        <SelectItem value="decor">Décor</SelectItem>
+                        <SelectItem value="fixateur">Fixateur</SelectItem>
+                        <SelectItem value="accessoires">Accessoires</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <div className="grid grid-cols-2 gap-3">
-                      <Input type="number" placeholder="QuantitÃƒÂ©" value={draftInvoiceItem.quantity || ""} onChange={e => updateDraftInvoiceItem("quantity", Number(e.target.value))} className="h-12 rounded-2xl border-gray-200 bg-white" />
+                      <Input type="number" placeholder="Quantité" value={draftInvoiceItem.quantity || ""} onChange={e => updateDraftInvoiceItem("quantity", Number(e.target.value))} className="h-12 rounded-2xl border-gray-200 bg-white" />
                       <Input type="number" placeholder="Prix achat" value={draftInvoiceItem.priceBuy || ""} onChange={e => updateDraftInvoiceItem("priceBuy", Number(e.target.value))} className="h-12 rounded-2xl border-gray-200 bg-white" />
                       <Input type="number" placeholder="Prix vente" value={draftInvoiceItem.priceSale || ""} onChange={e => updateDraftInvoiceItem("priceSale", Number(e.target.value))} className="h-12 rounded-2xl border-gray-200 bg-white" />
                       <Input type="date" value={draftInvoiceItem.expiryDate || ""} onChange={e => updateDraftInvoiceItem("expiryDate", e.target.value)} className="h-12 rounded-2xl border-gray-200 bg-white" />
@@ -330,7 +455,7 @@ export default function FacturesPage() {
                 </div>
                 {invoiceItems.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-[#c9dcda] px-4 py-10 text-center text-sm text-gray-400">
-                    Aucun produit validÃƒÂ©.
+                    Aucun produit validé.
                   </div>
                 ) : (
                   <div className="overflow-hidden rounded-[1.5rem] border border-gray-100 bg-white">
@@ -339,7 +464,7 @@ export default function FacturesPage() {
                         <thead className="bg-[#f7fbfa]">
                           <tr>
                             <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Produit</th>
-                            <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">QtÃƒÂ©</th>
+                            <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Qté</th>
                             <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Achat</th>
                             <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Vente</th>
                             <th className="px-4 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400">Total</th>
@@ -371,7 +496,7 @@ export default function FacturesPage() {
               <div className="hidden mt-4 space-y-4">
                 {invoiceItems.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-[#c9dcda] px-4 py-10 text-center text-sm text-gray-400">
-                    Aucun produit ajoutÃ©.
+                    Aucun produit ajouté.
                   </div>
                 ) : (
                   invoiceItems.map((item, idx) => (
@@ -386,52 +511,66 @@ export default function FacturesPage() {
                         </button>
                       </div>
 
-                      <div className="mt-3 flex rounded-2xl bg-white p-1">
-                        <button
-                          onClick={() => { const u = [...invoiceItems]; u[idx].isNew = false; setInvoiceItems(u); }}
-                          className={`flex-1 rounded-2xl px-3 py-2 text-xs font-bold ${!item.isNew ? "bg-[#41b86d] text-white" : "text-gray-500"}`}
-                        >
-                          Existant
-                        </button>
-                        <button
-                          onClick={() => { const u = [...invoiceItems]; u[idx].isNew = true; setInvoiceItems(u); }}
-                          className={`flex-1 rounded-2xl px-3 py-2 text-xs font-bold ${item.isNew ? "bg-[#41b86d] text-white" : "text-gray-500"}`}
-                        >
-                          Nouveau
-                        </button>
-                      </div>
-
                       <div className="mt-3 space-y-3">
-                        {item.isNew ? (
-                          <>
-                            <Input placeholder="Nom du produit" value={item.newName} onChange={e => { const u = [...invoiceItems]; u[idx].newName = e.target.value; setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
-                            <Select value={item.newCategory} onValueChange={v => { const u = [...invoiceItems]; u[idx].newCategory = v; setInvoiceItems(u); }}>
-                              <SelectTrigger className="h-12 rounded-2xl border-gray-200 bg-white text-sm">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="satine">SatinÃ©</SelectItem>
-                                <SelectItem value="enduit">Enduit</SelectItem>
-                                <SelectItem value="vinyle">Vinyle</SelectItem>
-                                <SelectItem value="laque">Laque</SelectItem>
-                                <SelectItem value="decor">DÃ©cor</SelectItem>
-                                <SelectItem value="fixateur">Fixateur</SelectItem>
-                                <SelectItem value="accessoires">Accessoires</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </>
-                        ) : (
-                          <Select value={item.productId} onValueChange={v => { const u = [...invoiceItems]; u[idx].productId = v; setInvoiceItems(u); }}>
-                            <SelectTrigger className="h-12 rounded-2xl border-gray-200 bg-white text-sm">
-                              <SelectValue placeholder="Choisir un produit..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
-                        )}
+                        <div className="relative">
+                          <Input
+                            placeholder="Nom du produit"
+                            value={item.newName}
+                            onChange={e => {
+                              const u = [...invoiceItems];
+                              u[idx].newName = e.target.value;
+                              setInvoiceItems(u);
+                              setShowProductSuggestions(idx);
+                            }}
+                            className="h-12 rounded-2xl border-gray-200 bg-white text-sm font-medium"
+                          />
+                          {showProductSuggestions === idx && getProductSuggestions(item.newName).length > 0 && (
+                            <div className="absolute top-14 left-0 right-0 z-50 divide-y divide-gray-50 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
+                              {getProductSuggestions(item.newName).map(p => (
+                                <button
+                                  key={p.id}
+                                  onClick={() => {
+                                    const u = [...invoiceItems];
+                                    u[idx] = {
+                                      ...u[idx],
+                                      productId: p.id,
+                                      newName: p.name,
+                                      newCategory: p.category,
+                                      priceBuy: p.priceBuy || u[idx].priceBuy,
+                                      priceSale: p.priceSale || u[idx].priceSale,
+                                      expiryDate: p.expiryDate || u[idx].expiryDate || ""
+                                    };
+                                    setInvoiceItems(u);
+                                    setShowProductSuggestions(null);
+                                  }}
+                                  className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-[#f7fbfa]"
+                                >
+                                  <div>
+                                    <p className="text-sm font-bold text-gray-700">{p.name}</p>
+                                    <p className="text-[10px] font-medium text-gray-400 capitalize">{p.category}</p>
+                                  </div>
+                                  <span className="rounded-full bg-[#eef5f4] px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-[#628b9a]">Existant</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <Select value={item.newCategory} onValueChange={v => { const u = [...invoiceItems]; u[idx].newCategory = v; setInvoiceItems(u); }}>
+                          <SelectTrigger className="h-12 rounded-2xl border-gray-200 bg-white text-sm">
+                            <SelectValue placeholder="Catégorie..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="satine">Satiné</SelectItem>
+                            <SelectItem value="enduit">Enduit</SelectItem>
+                            <SelectItem value="vinyle">Vinyle</SelectItem>
+                            <SelectItem value="laque">Laque</SelectItem>
+                            <SelectItem value="decor">Décor</SelectItem>
+                            <SelectItem value="fixateur">Fixateur</SelectItem>
+                            <SelectItem value="accessoires">Accessoires</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <div className="grid grid-cols-2 gap-3">
-                          <Input type="number" placeholder="QuantitÃ©" value={item.quantity || ""} onChange={e => { const u = [...invoiceItems]; u[idx].quantity = Number(e.target.value); setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
+                          <Input type="number" placeholder="Quantité" value={item.quantity || ""} onChange={e => { const u = [...invoiceItems]; u[idx].quantity = Number(e.target.value); setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
                           <Input type="number" placeholder="Prix achat" value={item.priceBuy || ""} onChange={e => { const u = [...invoiceItems]; u[idx].priceBuy = Number(e.target.value); setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
                           <Input type="number" placeholder="Prix vente" value={item.priceSale || ""} onChange={e => { const u = [...invoiceItems]; u[idx].priceSale = Number(e.target.value); setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
                           <Input type="date" value={item.expiryDate || ""} onChange={e => { const u = [...invoiceItems]; u[idx].expiryDate = e.target.value; setInvoiceItems(u); }} className="h-12 rounded-2xl border-gray-200 bg-white" />
@@ -450,11 +589,11 @@ export default function FacturesPage() {
                   <p className="mt-1 text-2xl font-black">{formatDZD(invoiceTotal)}</p>
                 </div>
                 <Button
-                  onClick={handleSubmitInvoice}
+                  onClick={view === "edit" ? handleUpdateInvoice : handleSubmitInvoice}
                   disabled={invoiceItems.length === 0}
                   className="h-12 rounded-2xl bg-[#41b86d] px-5 font-bold text-white hover:bg-[#39a05f]"
                 >
-                  Valider
+                  {view === "edit" ? "Mettre à jour" : "Valider"}
                 </Button>
               </div>
             </div>
@@ -476,16 +615,18 @@ export default function FacturesPage() {
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div>
-                <h2 className="text-2xl font-black tracking-tight text-[#3f5362]">Nouvelle Facture</h2>
-                <p className="text-xs text-gray-400 font-medium mt-0.5">Saisir les informations de la facture d'achat</p>
+                <h2 className="text-2xl font-black tracking-tight text-[#3f5362]">{view === "edit" ? "Modifier la Facture" : "Nouvelle Facture"}</h2>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">
+                  {view === "edit" ? "Mettez à jour les informations de l'achat" : "Saisir les informations de la facture d'achat"}
+                </p>
               </div>
             </div>
             <Button
-              onClick={handleSubmitInvoice}
+              onClick={view === "edit" ? handleUpdateInvoice : handleSubmitInvoice}
               disabled={invoiceItems.length === 0}
               className="bg-[#41b86d] hover:bg-[#39a05f] text-white shadow-sm font-bold h-11 px-6 rounded-xl disabled:opacity-40"
             >
-              Valider la Facture
+              {view === "edit" ? "Sauvegarder les modifications" : "Valider la Facture"}
             </Button>
           </div>
         </div>
@@ -499,329 +640,362 @@ export default function FacturesPage() {
               </div>
               <h3 className="font-bold text-gray-700 text-sm tracking-wide uppercase">Fournisseur & Date</h3>
             </div>
-            <div className="p-6 space-y-4">
-              {/* Toggle buttons */}
-              <div className="flex gap-2 bg-gray-100 p-1 rounded-xl w-fit">
-                <button
-                  onClick={() => setIsNewSupplier(false)}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${!isNewSupplier ? "bg-white text-[#3f5362] shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
-                >
-                  Fournisseur existant
-                </button>
-                <button
-                  onClick={() => setIsNewSupplier(true)}
-                  className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${isNewSupplier ? "bg-white text-[#3f5362] shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
-                >
-                  Nouveau fournisseur
-                </button>
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2 relative">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Nom du Fournisseur</label>
+                  <div className="relative">
+                    <Input
+                      placeholder="Taper le nom du fournisseur..."
+                      value={newSupplier.name}
+                      onChange={e => {
+                        setNewSupplier(p => ({ ...p, name: e.target.value }));
+                        setShowSupplierSuggestions(true);
+                      }}
+                      className="bg-gray-50 border-gray-200 h-12 rounded-xl focus-visible:ring-0 text-sm font-medium"
+                    />
+                    {supplierSuggestions.length > 0 && (
+                      <div className="absolute top-14 left-0 right-0 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 py-2 divide-y divide-gray-50 overflow-hidden ring-1 ring-black/5">
+                        {supplierSuggestions.map(s => (
+                          <button
+                            key={s.id}
+                            onClick={() => {
+                              setNewSupplier({ name: s.name, phone: s.phone || "", address: s.address || "" });
+                              setShowSupplierSuggestions(false);
+                            }}
+                            className="w-full text-left px-5 py-3.5 hover:bg-[#41b86d]/5 transition-all flex items-center justify-between group"
+                          >
+                            <span className="font-bold text-gray-700 group-hover:text-[#41b86d]">{s.name}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[9px] bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full font-black uppercase tracking-widest group-hover:bg-[#41b86d]/10 group-hover:text-[#41b86d]">Existant</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Date de la Facture</label>
+                  <Input
+                    type="date"
+                    value={invoiceDate}
+                    onChange={e => setInvoiceDate(e.target.value)}
+                    className="bg-gray-50 border-gray-200 h-12 rounded-xl focus-visible:ring-0 font-medium"
+                  />
+                </div>
               </div>
 
-              {isNewSupplier ? (
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Nom</label>
-                    <Input placeholder="Nom du fournisseur" value={newSupplier.name} onChange={e => setNewSupplier(p => ({ ...p, name: e.target.value }))} className="bg-gray-50 border-gray-200 h-11 rounded-xl focus-visible:ring-0" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">TÃ©lÃ©phone</label>
-                    <Input placeholder="0555 ..." value={newSupplier.phone} onChange={e => setNewSupplier(p => ({ ...p, phone: e.target.value }))} className="bg-gray-50 border-gray-200 h-11 rounded-xl focus-visible:ring-0" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Adresse</label>
-                    <Input placeholder="Adresse" value={newSupplier.address} onChange={e => setNewSupplier(p => ({ ...p, address: e.target.value }))} className="bg-gray-50 border-gray-200 h-11 rounded-xl focus-visible:ring-0" />
-                  </div>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Téléphone (Optionnel)</label>
+                  <Input
+                    placeholder="Numéro de téléphone..."
+                    value={newSupplier.phone}
+                    onChange={e => setNewSupplier(p => ({ ...p, phone: e.target.value }))}
+                    className="bg-gray-50 border-gray-200 h-12 rounded-xl focus-visible:ring-0"
+                  />
                 </div>
-              ) : (
-                <div className="max-w-sm">
-                  <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Choisir un fournisseur</label>
-                  <Select value={supplierId} onValueChange={setSupplierId}>
-                    <SelectTrigger className="bg-gray-50 border-gray-200 h-11 rounded-xl focus-visible:ring-0">
-                      <SelectValue placeholder="SÃ©lectionner..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block">Adresse (Optionnel)</label>
+                  <Input
+                    placeholder="Adresse du fournisseur..."
+                    value={newSupplier.address}
+                    onChange={e => setNewSupplier(p => ({ ...p, address: e.target.value }))}
+                    className="bg-gray-50 border-gray-200 h-12 rounded-xl focus-visible:ring-0"
+                  />
                 </div>
-              )}
-
-              <div className="max-w-xs">
-                <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-1.5">Date de la facture</label>
-                <Input type="date" value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} className="bg-gray-50 border-gray-200 h-11 rounded-xl focus-visible:ring-0 w-48" />
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Products Section */}
-          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-[#628b9a]/10 flex items-center justify-center">
-                  <Package className="h-4 w-4 text-[#628b9a]" />
+        {/* Products Section */}
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="h-8 w-8 rounded-lg bg-[#628b9a]/10 flex items-center justify-center">
+                <Package className="h-4 w-4 text-[#628b9a]" />
+              </div>
+              <h3 className="font-bold text-gray-700 text-sm tracking-wide uppercase">Produits</h3>
+              {invoiceItems.length > 0 && (
+                <span className="bg-[#41b86d]/10 text-[#41b86d] text-xs font-black px-2 py-0.5 rounded-full">{invoiceItems.length}</span>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={addInvoiceItem}
+              className="hidden border-gray-200 text-gray-600 hover:bg-[#41b86d]/5 hover:border-[#41b86d]/30 hover:text-[#41b86d] font-bold rounded-lg"
+            >
+              <Plus className="h-4 w-4 mr-1" /> Ajouter un produit
+            </Button>
+          </div>
+
+          <div className="p-6 pb-0">
+            <div className="border border-gray-100 rounded-xl p-4 space-y-4 bg-gray-50/50">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black text-gray-300">+</span>
+                  <span className="text-sm font-black text-[#3f5362]">Nouveau produit</span>
                 </div>
-                <h3 className="font-bold text-gray-700 text-sm tracking-wide uppercase">Produits</h3>
-                {invoiceItems.length > 0 && (
-                  <span className="bg-[#41b86d]/10 text-[#41b86d] text-xs font-black px-2 py-0.5 rounded-full">{invoiceItems.length}</span>
+                <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#628b9a]">Toujours visible</span>
+              </div>
+
+              <div className="relative">
+                <Input
+                  placeholder="Rechercher ou taper le nom du produit..."
+                  value={draftInvoiceItem.newName}
+                  onChange={e => {
+                    updateDraftInvoiceItem("newName", e.target.value);
+                    setShowProductSuggestions("draft");
+                  }}
+                  className="bg-white border-gray-200 h-11 rounded-lg focus-visible:ring-0 text-sm font-medium"
+                />
+                {showProductSuggestions === "draft" && getProductSuggestions(draftInvoiceItem.newName).length > 0 && (
+                  <div className="absolute top-12 left-0 right-0 z-50 divide-y divide-gray-50 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-2xl ring-1 ring-black/5">
+                    {getProductSuggestions(draftInvoiceItem.newName).map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          setDraftInvoiceItem(prev => ({
+                            ...prev,
+                            productId: p.id,
+                            newName: p.name,
+                            newCategory: p.category,
+                            priceBuy: p.priceBuy || prev.priceBuy,
+                            priceSale: p.priceSale || prev.priceSale,
+                            expiryDate: p.expiryDate || prev.expiryDate || ""
+                          }));
+                          setShowProductSuggestions(null);
+                        }}
+                        className="flex w-full items-center justify-between px-5 py-3.5 text-left hover:bg-[#41b86d]/5 group transition-all"
+                      >
+                        <div>
+                          <p className="text-sm font-bold text-gray-700 group-hover:text-[#41b86d]">{p.name}</p>
+                          <p className="text-[10px] font-medium text-gray-400 capitalize">{p.category}</p>
+                        </div>
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-gray-400 group-hover:bg-[#41b86d]/10 group-hover:text-[#41b86d]">Existant</span>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Catégorie</label>
+                <Select value={draftInvoiceItem.newCategory} onValueChange={value => updateDraftInvoiceItem("newCategory", value)}>
+                  <SelectTrigger className="bg-white border-gray-200 h-11 rounded-lg focus-visible:ring-0 text-sm"><SelectValue placeholder="Catégorie..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="satine">Satiné</SelectItem>
+                    <SelectItem value="enduit">Enduit</SelectItem>
+                    <SelectItem value="vinyle">Vinyle</SelectItem>
+                    <SelectItem value="laque">Laque</SelectItem>
+                    <SelectItem value="decor">Décor</SelectItem>
+                    <SelectItem value="fixateur">Fixateur</SelectItem>
+                    <SelectItem value="accessoires">Accessoires</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-4 gap-3">
+                {[
+                  { label: "Quantité", placeholder: "0", key: "quantity", type: "number" },
+                  { label: "Prix achat", placeholder: "0 DZD", key: "priceBuy", type: "number" },
+                  { label: "Prix vente", placeholder: "0 DZD", key: "priceSale", type: "number" },
+                  { label: "Péremption", placeholder: "", key: "expiryDate", type: "date" },
+                ].map(field => (
+                  <div key={field.key} className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{field.label}</label>
+                    <Input
+                      type={field.type}
+                      placeholder={field.placeholder}
+                      value={(draftInvoiceItem as any)[field.key] || ""}
+                      onChange={e => updateDraftInvoiceItem(field.key as keyof InvoiceFormItem, (field.type === "number" ? Number(e.target.value) : e.target.value) as never)}
+                      className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+
+
               <Button
-                variant="outline"
-                size="sm"
                 onClick={addInvoiceItem}
-                className="hidden border-gray-200 text-gray-600 hover:bg-[#41b86d]/5 hover:border-[#41b86d]/30 hover:text-[#41b86d] font-bold rounded-lg"
+                disabled={!canAddDraftInvoiceItem}
+                className="w-full h-11 bg-[#41b86d] hover:bg-[#39a05f] text-white shadow-sm font-bold rounded-xl disabled:opacity-40"
               >
-                <Plus className="h-4 w-4 mr-1" /> Ajouter un produit
+                Valider le produit
               </Button>
             </div>
+          </div>
 
-            <div className="p-6 pb-0">
-              <div className="border border-gray-100 rounded-xl p-4 space-y-4 bg-gray-50/50">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-gray-300">+</span>
-                    <span className="text-sm font-black text-[#3f5362]">Nouveau produit</span>
-                  </div>
-                  <span className="rounded-full bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#628b9a]">Toujours visible</span>
-                </div>
-
-                <div className="flex gap-1.5 bg-white p-0.5 rounded-lg border border-gray-100 w-fit">
-                  <button
-                    onClick={() => handleDraftInvoiceMode(false)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${!draftInvoiceItem.isNew ? "bg-[#41b86d] text-white shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
-                  >
-                    Existant
-                  </button>
-                  <button
-                    onClick={() => handleDraftInvoiceMode(true)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${draftInvoiceItem.isNew ? "bg-[#41b86d] text-white shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
-                  >
-                    Nouveau
-                  </button>
-                </div>
-
-                {draftInvoiceItem.isNew ? (
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nom du produit</label>
-                      <Input placeholder="Ex: Peinture SatinÃƒÂ©e..." value={draftInvoiceItem.newName} onChange={e => updateDraftInvoiceItem("newName", e.target.value)} className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm" />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">CatÃƒÂ©gorie</label>
-                      <Select value={draftInvoiceItem.newCategory} onValueChange={value => updateDraftInvoiceItem("newCategory", value)}>
-                        <SelectTrigger className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="satine">SatinÃƒÂ©</SelectItem>
-                          <SelectItem value="enduit">Enduit</SelectItem>
-                          <SelectItem value="vinyle">Vinyle</SelectItem>
-                          <SelectItem value="laque">Laque</SelectItem>
-                          <SelectItem value="decor">DÃƒÂ©cor</SelectItem>
-                          <SelectItem value="fixateur">Fixateur</SelectItem>
-                          <SelectItem value="accessoires">Accessoires</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Produit</label>
-                    <Select value={draftInvoiceItem.productId} onValueChange={value => updateDraftInvoiceItem("productId", value)}>
-                      <SelectTrigger className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm"><SelectValue placeholder="Choisir un produit..." /></SelectTrigger>
-                      <SelectContent>{products.map(product => <SelectItem key={product.id} value={product.id}>{product.name}</SelectItem>)}</SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-4 gap-3">
-                  {[
-                    { label: "QuantitÃƒÂ©", placeholder: "0", key: "quantity", type: "number" },
-                    { label: "Prix achat", placeholder: "0 DZD", key: "priceBuy", type: "number" },
-                    { label: "Prix vente", placeholder: "0 DZD", key: "priceSale", type: "number" },
-                    { label: "PÃƒÂ©remption", placeholder: "", key: "expiryDate", type: "date" },
-                  ].map(field => (
-                    <div key={field.key} className="space-y-1">
-                      <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{field.label}</label>
-                      <Input
-                        type={field.type}
-                        placeholder={field.placeholder}
-                        value={(draftInvoiceItem as any)[field.key] || ""}
-                        onChange={e => updateDraftInvoiceItem(field.key as keyof InvoiceFormItem, (field.type === "number" ? Number(e.target.value) : e.target.value) as never)}
-                        className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm"
-                      />
-                    </div>
-                  ))}
-                </div>
-
-
-                <Button
-                  onClick={addInvoiceItem}
-                  disabled={!canAddDraftInvoiceItem}
-                  className="w-full h-11 bg-[#41b86d] hover:bg-[#39a05f] text-white shadow-sm font-bold rounded-xl disabled:opacity-40"
-                >
-                  Valider le produit
-                </Button>
+          <div className="p-6 space-y-4">
+            {invoiceItems.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <PackagePlus className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm font-medium">Aucun produit validé</p>
+                <p className="text-xs mt-1">Remplissez le formulaire ci-dessus puis validez le produit.</p>
               </div>
-            </div>
-
-            <div className="p-6 space-y-4">
-              {invoiceItems.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <PackagePlus className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm font-medium">Aucun produit validÃƒÂ©</p>
-                  <p className="text-xs mt-1">Remplissez le formulaire ci-dessus puis validez le produit.</p>
-                </div>
-              ) : (
-                <div className="overflow-hidden rounded-xl border border-gray-100">
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50/80 border-b border-gray-100">
-                      <tr>
-                        <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Produit</th>
-                        <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">QtÃƒÂ©</th>
-                        <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Prix achat</th>
-                        <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Prix vente</th>
-                        <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Total achat</th>
-                        <th className="px-4 py-3"></th>
+            ) : (
+              <div className="overflow-hidden rounded-xl border border-gray-100">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50/80 border-b border-gray-100">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Produit</th>
+                      <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Qté</th>
+                      <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Prix achat</th>
+                      <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Prix vente</th>
+                      <th className="text-left px-4 py-3 font-bold text-[10px] uppercase tracking-widest text-gray-400">Total achat</th>
+                      <th className="px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invoiceItems.map((item, idx) => (
+                      <tr key={`${getInvoiceItemLabel(item)}-${idx}`} className="border-b last:border-0 border-gray-50">
+                        <td className="px-4 py-3 font-semibold text-[#3f5362]">{getInvoiceItemLabel(item)}</td>
+                        <td className="px-4 py-3 text-gray-600">{item.quantity}</td>
+                        <td className="px-4 py-3 text-gray-600">{formatDZD(item.priceBuy)}</td>
+                        <td className="px-4 py-3 text-gray-600">{formatDZD(item.priceSale)}</td>
+                        <td className="px-4 py-3 font-bold text-[#41b86d]">{formatDZD(item.priceBuy * item.quantity)}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            onClick={() => removeInvoiceItem(idx)}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {invoiceItems.map((item, idx) => (
-                        <tr key={`${getInvoiceItemLabel(item)}-${idx}`} className="border-b last:border-0 border-gray-50">
-                          <td className="px-4 py-3 font-semibold text-[#3f5362]">{getInvoiceItemLabel(item)}</td>
-                          <td className="px-4 py-3 text-gray-600">{item.quantity}</td>
-                          <td className="px-4 py-3 text-gray-600">{formatDZD(item.priceBuy)}</td>
-                          <td className="px-4 py-3 text-gray-600">{formatDZD(item.priceSale)}</td>
-                          <td className="px-4 py-3 font-bold text-[#41b86d]">{formatDZD(item.priceBuy * item.quantity)}</td>
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => removeInvoiceItem(idx)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="hidden p-6 space-y-4">
-              {invoiceItems.length === 0 ? (
-                <div className="text-center py-12 text-gray-400">
-                  <PackagePlus className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm font-medium">Aucun produit ajoutÃ©</p>
-                  <p className="text-xs mt-1">Cliquez sur "Ajouter un produit" pour commencer</p>
-                </div>
-              ) : (
-                invoiceItems.map((item, idx) => (
-                  <div key={idx} className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50/50 relative group">
-                    <button
-                      onClick={() => removeInvoiceItem(idx)}
-                      className="absolute top-3 right-3 h-7 w-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-black text-gray-300 w-5">#{idx + 1}</span>
-                      <div className="flex gap-1.5 bg-white p-0.5 rounded-lg border border-gray-100">
-                        <button
-                          onClick={() => { const u = [...invoiceItems]; u[idx].isNew = false; setInvoiceItems(u); }}
-                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${!item.isNew ? "bg-[#41b86d] text-white shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
-                        >
-                          Existant
-                        </button>
-                        <button
-                          onClick={() => { const u = [...invoiceItems]; u[idx].isNew = true; setInvoiceItems(u); }}
-                          className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${item.isNew ? "bg-[#41b86d] text-white shadow-sm" : "text-gray-400 hover:text-gray-600"}`}
-                        >
-                          Nouveau
-                        </button>
-                      </div>
-                    </div>
-
-                    {item.isNew ? (
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nom du produit</label>
-                          <Input placeholder="Ex: Peinture SatinÃ©e..." value={item.newName} onChange={e => { const u = [...invoiceItems]; u[idx].newName = e.target.value; setInvoiceItems(u); }} className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm" />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">CatÃ©gorie</label>
-                          <Select value={item.newCategory} onValueChange={v => { const u = [...invoiceItems]; u[idx].newCategory = v; setInvoiceItems(u); }}>
-                            <SelectTrigger className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="satine">SatinÃ©</SelectItem>
-                              <SelectItem value="enduit">Enduit</SelectItem>
-                              <SelectItem value="vinyle">Vinyle</SelectItem>
-                              <SelectItem value="laque">Laque</SelectItem>
-                              <SelectItem value="decor">DÃ©cor</SelectItem>
-                              <SelectItem value="fixateur">Fixateur</SelectItem>
-                              <SelectItem value="accessoires">Accessoires</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Produit</label>
-                        <Select value={item.productId} onValueChange={v => { const u = [...invoiceItems]; u[idx].productId = v; setInvoiceItems(u); }}>
-                          <SelectTrigger className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm"><SelectValue placeholder="Choisir un produit..." /></SelectTrigger>
-                          <SelectContent>{products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
-                        </Select>
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-4 gap-3">
-                      {[
-                        { label: "QuantitÃ©", placeholder: "0", key: "quantity", type: "number" },
-                        { label: "Prix achat", placeholder: "0 DZD", key: "priceBuy", type: "number" },
-                        { label: "Prix vente", placeholder: "0 DZD", key: "priceSale", type: "number" },
-                        { label: "PÃ©remption", placeholder: "", key: "expiryDate", type: "date" },
-                      ].map(field => (
-                        <div key={field.key} className="space-y-1">
-                          <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{field.label}</label>
-                          <Input
-                            type={field.type}
-                            placeholder={field.placeholder}
-                            value={(item as any)[field.key] || ""}
-                            onChange={e => { const u = [...invoiceItems]; (u[idx] as any)[field.key] = field.type === "number" ? Number(e.target.value) : e.target.value; setInvoiceItems(u); }}
-                            className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {invoiceItems.length > 0 && (
-              <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
-                <span className="text-sm font-bold text-gray-500">{invoiceItems.length} produit{invoiceItems.length > 1 ? "s" : ""}</span>
-                <span className="text-xl font-black text-[#41b86d]">{formatDZD(invoiceTotal)}</span>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
 
-          {/* Bottom action */}
-          <div className="flex gap-3 justify-end pb-8">
-            <Button
-              variant="outline"
-              onClick={() => { resetAddForm(); setView("list"); }}
-              className="border-gray-200 text-gray-500 hover:bg-gray-50 font-bold h-11 px-6 rounded-xl"
-            >
-              Annuler
-            </Button>
-            <Button
-              onClick={handleSubmitInvoice}
-              disabled={invoiceItems.length === 0}
-              className="bg-[#41b86d] hover:bg-[#39a05f] text-white shadow-sm font-bold h-11 px-8 rounded-xl disabled:opacity-40"
-            >
-              Valider la Facture
-            </Button>
+          <div className="hidden p-6 space-y-4">
+            {invoiceItems.length === 0 ? (
+              <div className="text-center py-12 text-gray-400">
+                <PackagePlus className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm font-medium">Aucun produit ajouté</p>
+                <p className="text-xs mt-1">Cliquez sur "Ajouter un produit" pour commencer</p>
+              </div>
+            ) : (
+              invoiceItems.map((item, idx) => (
+                <div key={idx} className="border border-gray-100 rounded-xl p-4 space-y-3 bg-gray-50/50 relative group">
+                  <button
+                    onClick={() => removeInvoiceItem(idx)}
+                    className="absolute top-3 right-3 h-7 w-7 flex items-center justify-center rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+
+                  <div className="relative">
+                    <Input
+                      placeholder="Nom du produit"
+                      value={item.newName}
+                      onChange={e => {
+                        const u = [...invoiceItems];
+                        u[idx].newName = e.target.value;
+                        setInvoiceItems(u);
+                        setShowProductSuggestions(idx);
+                      }}
+                      className="h-12 rounded-2xl border-gray-200 bg-white text-sm font-medium"
+                    />
+                    {showProductSuggestions === idx && getProductSuggestions(item.newName).length > 0 && (
+                      <div className="absolute top-14 left-0 right-0 z-50 divide-y divide-gray-50 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-xl">
+                        {getProductSuggestions(item.newName).map(p => (
+                          <button
+                            key={p.id}
+                            onClick={() => {
+                              const u = [...invoiceItems];
+                              u[idx] = {
+                                ...u[idx],
+                                productId: p.id,
+                                newName: p.name,
+                                newCategory: p.category,
+                                priceBuy: p.priceBuy || u[idx].priceBuy,
+                                priceSale: p.priceSale || u[idx].priceSale,
+                                expiryDate: p.expiryDate || u[idx].expiryDate || ""
+                              };
+                              setInvoiceItems(u);
+                              setShowProductSuggestions(null);
+                            }}
+                            className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-[#f7fbfa]"
+                          >
+                            <div>
+                              <p className="text-sm font-bold text-gray-700">{p.name}</p>
+                              <p className="text-[10px] font-medium text-gray-400 capitalize">{p.category}</p>
+                            </div>
+                            <span className="rounded-full bg-[#eef5f4] px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-[#628b9a]">Existant</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <Select value={item.newCategory} onValueChange={v => { const u = [...invoiceItems]; u[idx].newCategory = v; setInvoiceItems(u); }}>
+                    <SelectTrigger className="h-12 rounded-2xl border-gray-200 bg-white text-sm">
+                      <SelectValue placeholder="Catégorie..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="satine">Satiné</SelectItem>
+                      <SelectItem value="enduit">Enduit</SelectItem>
+                      <SelectItem value="vinyle">Vinyle</SelectItem>
+                      <SelectItem value="laque">Laque</SelectItem>
+                      <SelectItem value="decor">Décor</SelectItem>
+                      <SelectItem value="fixateur">Fixateur</SelectItem>
+                      <SelectItem value="accessoires">Accessoires</SelectItem>
+                    </SelectContent>
+                  </Select>
+
+                  <div className="grid grid-cols-4 gap-3">
+                    {[
+                      { label: "Quantité", placeholder: "0", key: "quantity", type: "number" },
+                      { label: "Prix achat", placeholder: "0 DZD", key: "priceBuy", type: "number" },
+                      { label: "Prix vente", placeholder: "0 DZD", key: "priceSale", type: "number" },
+                      { label: "Péremption", placeholder: "", key: "expiryDate", type: "date" },
+                    ].map(field => (
+                      <div key={field.key} className="space-y-1">
+                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{field.label}</label>
+                        <Input
+                          type={field.type}
+                          placeholder={field.placeholder}
+                          value={(item as any)[field.key] || ""}
+                          onChange={e => { const u = [...invoiceItems]; (u[idx] as any)[field.key] = field.type === "number" ? Number(e.target.value) : e.target.value; setInvoiceItems(u); }}
+                          className="bg-white border-gray-200 h-10 rounded-lg focus-visible:ring-0 text-sm"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
+
+          {invoiceItems.length > 0 && (
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
+              <span className="text-sm font-bold text-gray-500">{invoiceItems.length} produit{invoiceItems.length > 1 ? "s" : ""}</span>
+              <span className="text-xl font-black text-[#41b86d]">{formatDZD(invoiceTotal)}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom action */}
+        <div className="flex gap-3 justify-end pb-8">
+          <Button
+            variant="outline"
+            onClick={() => { resetAddForm(); setView("list"); }}
+            className="border-gray-200 text-gray-500 hover:bg-gray-50 font-bold h-11 px-6 rounded-xl"
+          >
+            Annuler
+          </Button>
+          <Button
+            onClick={handleSubmitInvoice}
+            disabled={invoiceItems.length === 0}
+            className="bg-[#41b86d] hover:bg-[#39a05f] text-white shadow-sm font-bold h-11 px-8 rounded-xl disabled:opacity-40"
+          >
+            Valider la Facture
+          </Button>
         </div>
       </div>
     );
@@ -842,7 +1016,7 @@ export default function FacturesPage() {
               </button>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">Retours</p>
               <h2 className="mt-3 text-3xl font-black tracking-tight">Retour facture</h2>
-              <p className="mt-1 text-sm text-white/70">SÃ©lectionnez une facture et les quantitÃ©s Ã  retirer.</p>
+              <p className="mt-1 text-sm text-white/70">Sélectionnez une facture et les quantités à retirer.</p>
             </div>
 
             <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
@@ -863,7 +1037,7 @@ export default function FacturesPage() {
 
             {selectedReturnInvoice && (
               <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
-                <p className="text-sm font-black text-[#243740]">Produits Ã  retourner</p>
+                <p className="text-sm font-black text-[#243740]">Produits à retourner</p>
                 <div className="mt-4 space-y-3">
                   {selectedReturnInvoice.items.map((item, idx) => {
                     const currentQty = returnItems.find(r => r.idx === idx)?.quantity || 0;
@@ -871,7 +1045,7 @@ export default function FacturesPage() {
                       <div key={idx} className="rounded-[1.5rem] border border-gray-100 bg-[#f7fbfa] p-4">
                         <p className="text-sm font-bold text-[#243740]">{item.product.name}</p>
                         <p className="mt-1 text-xs text-gray-500">
-                          AchetÃ©: {item.quantity} â€¢ {formatDZD(item.priceBuy)} / unitÃ©
+                          Acheté: {item.quantity} • {formatDZD(item.priceBuy)} / unité
                         </p>
                         <Input
                           type="number"
@@ -879,7 +1053,7 @@ export default function FacturesPage() {
                           min={0}
                           max={item.quantity}
                           value={currentQty || ""}
-                          placeholder="QtÃ© retour"
+                          placeholder="Qté retour"
                           onChange={e => {
                             const qty = Math.min(Number(e.target.value), item.quantity);
                             setReturnItems(prev => {
@@ -931,7 +1105,7 @@ export default function FacturesPage() {
               </button>
               <div>
                 <h2 className="text-2xl font-black tracking-tight text-[#3f5362]">Retour de Facture</h2>
-                <p className="text-xs text-gray-400 font-medium mt-0.5">SÃ©lectionner une facture et les produits Ã  retourner</p>
+                <p className="text-xs text-gray-400 font-medium mt-0.5">Sélectionner une facture et les produits à retourner</p>
               </div>
             </div>
             <Button
@@ -955,7 +1129,7 @@ export default function FacturesPage() {
               <h3 className="font-bold text-gray-700 text-sm tracking-wide uppercase">Facture d'origine</h3>
             </div>
             <div className="p-6">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-2">SÃ©lectionner une facture d'achat</label>
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest block mb-2">Sélectionner une facture d'achat</label>
               <Select value={returnInvoiceId} onValueChange={v => { setReturnInvoiceId(v); setReturnItems([]); }}>
                 <SelectTrigger className="bg-gray-50 border-gray-200 h-11 rounded-xl focus-visible:ring-0 max-w-lg">
                   <SelectValue placeholder="Choisir une facture..." />
@@ -965,7 +1139,7 @@ export default function FacturesPage() {
                     <SelectItem key={i.id} value={i.id}>
                       <span className="font-mono text-xs text-gray-400 mr-2">{i.number}</span>
                       {i.supplier.name}
-                      <span className="text-gray-400 ml-2 text-xs">Â· {new Date(i.date).toLocaleDateString("fr-FR")}</span>
+                      <span className="text-gray-400 ml-2 text-xs">· {new Date(i.date).toLocaleDateString("fr-FR")}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -977,8 +1151,8 @@ export default function FacturesPage() {
           {selectedReturnInvoice && (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
               <div className="px-6 py-4 border-b border-gray-50">
-                <h3 className="font-bold text-gray-700 text-sm tracking-wide uppercase">Produits Ã  retourner</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Saisir la quantitÃ© Ã  retourner pour chaque produit (0 = pas de retour)</p>
+                <h3 className="font-bold text-gray-700 text-sm tracking-wide uppercase">Produits à retourner</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Saisir la quantité à retourner pour chaque produit (0 = pas de retour)</p>
               </div>
               <div className="p-6 space-y-3">
                 {selectedReturnInvoice.items.map((item, idx) => {
@@ -988,13 +1162,13 @@ export default function FacturesPage() {
                       <div className="flex-1">
                         <p className="font-bold text-gray-700 text-sm">{item.product.name}</p>
                         <p className="text-xs text-gray-400 mt-0.5">
-                          AchetÃ© : <span className="font-bold text-gray-600">{item.quantity}</span>
-                          <span className="mx-2">Â·</span>
-                          {formatDZD(item.priceBuy)} / unitÃ©
+                          Acheté : <span className="font-bold text-gray-600">{item.quantity}</span>
+                          <span className="mx-2">·</span>
+                          {formatDZD(item.priceBuy)} / unité
                         </p>
                       </div>
                       <div className="flex items-center gap-3 ml-6">
-                        <label className="text-xs font-bold text-gray-400">QtÃ© retour</label>
+                        <label className="text-xs font-bold text-gray-400">Qté retour</label>
                         <Input
                           type="number"
                           className="w-24 h-10 text-center rounded-xl border-gray-200 bg-white focus-visible:ring-0 font-bold text-gray-700"
@@ -1019,7 +1193,7 @@ export default function FacturesPage() {
               </div>
               {returnItems.length > 0 && (
                 <div className="px-6 py-4 border-t border-gray-100 bg-red-50/40 flex items-center justify-between">
-                  <span className="text-sm font-bold text-red-400">{returnItems.length} produit{returnItems.length > 1 ? "s" : ""} Ã  retourner</span>
+                  <span className="text-sm font-bold text-red-400">{returnItems.length} produit{returnItems.length > 1 ? "s" : ""} à retourner</span>
                   <span className="text-xl font-black text-red-500">{formatDZD(returnTotal)}</span>
                 </div>
               )}
@@ -1100,7 +1274,7 @@ export default function FacturesPage() {
           <div className="space-y-3">
             {filtered.length === 0 ? (
               <div className="rounded-[1.75rem] border border-dashed border-[#c9dcda] bg-white px-4 py-10 text-center text-sm font-medium text-gray-400">
-                Aucune facture trouvÃ©e.
+                Aucune facture trouvée.
               </div>
             ) : (
               filtered.map(inv => (
@@ -1121,14 +1295,25 @@ export default function FacturesPage() {
                       <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Total</p>
                       <p className="text-base font-black text-[#41b86d]">{formatDZD(inv.total)}</p>
                     </div>
-                    <Button
-                      variant="outline"
-                      className="h-11 rounded-2xl border-[#41b86d]/20 text-[#41b86d] hover:bg-[#41b86d]/5"
-                      onClick={() => setSelectedInvoice(inv)}
-                    >
-                      <Eye className="mr-2 h-4 w-4" />
-                      DÃ©tail
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        className="h-11 rounded-2xl border-[#41b86d]/20 text-[#41b86d] hover:bg-[#41b86d]/5"
+                        onClick={() => setSelectedInvoice(inv)}
+                      >
+                        <Eye className="mr-2 h-4 w-4" />
+                        Détail
+                      </Button>
+                      {inv.type === "achat" && (
+                        <Button
+                          variant="outline"
+                          className="h-11 w-11 rounded-2xl border-gray-200 text-gray-500 hover:bg-gray-50"
+                          onClick={() => startEditing(inv)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </article>
               ))
@@ -1164,7 +1349,7 @@ export default function FacturesPage() {
                 <div className="space-y-2 px-1">
                   {selectedInvoice.items.map((item, i) => (
                     <div key={i} className="flex items-center justify-between rounded-2xl border border-gray-50 bg-white p-3">
-                      <span className="text-sm font-bold text-gray-700">{item.product.name} <span className="ml-1 font-medium text-gray-400">Ã— {item.quantity}</span></span>
+                      <span className="text-sm font-bold text-gray-700">{item.product.name} <span className="ml-1 font-medium text-gray-400">× {item.quantity}</span></span>
                       <span className="font-bold text-gray-600">{formatDZD(item.priceBuy * item.quantity)}</span>
                     </div>
                   ))}
@@ -1229,7 +1414,7 @@ export default function FacturesPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50/80 border-b border-gray-100">
             <tr>
-              <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">NÂ° Facture</th>
+              <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">N° Facture</th>
               <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">Fournisseur</th>
               <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">Date</th>
               <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">Type</th>
@@ -1242,7 +1427,7 @@ export default function FacturesPage() {
               <tr>
                 <td colSpan={6} className="text-center py-16 text-gray-400 font-medium">
                   <Search className="h-8 w-8 mx-auto mb-3 opacity-20" />
-                  Aucune facture trouvÃ©e
+                  Aucune facture trouvée
                 </td>
               </tr>
             ) : (
@@ -1258,14 +1443,26 @@ export default function FacturesPage() {
                   </td>
                   <td className="px-6 py-4 text-center font-black text-[#41b86d]">{formatDZD(inv.total)}</td>
                   <td className="px-6 py-4 text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-gray-300 hover:text-[#41b86d] hover:bg-[#41b86d]/10 transition-colors"
-                      onClick={() => setSelectedInvoice(inv)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-gray-300 hover:text-[#41b86d] hover:bg-[#41b86d]/10 transition-colors"
+                        onClick={() => setSelectedInvoice(inv)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      {inv.type === "achat" && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-gray-300 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                          onClick={() => startEditing(inv)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -1274,7 +1471,7 @@ export default function FacturesPage() {
         </table>
       </div>
 
-      {/* Detail Modal â€” kept as dialog since it's just a viewer */}
+      {/* Detail Modal — kept as dialog since it's just a viewer */}
       <Dialog open={!!selectedInvoice} onOpenChange={() => setSelectedInvoice(null)}>
         <DialogContent className="sm:max-w-lg bg-white border-0 shadow-xl rounded-2xl">
           <DialogHeader>
@@ -1303,7 +1500,7 @@ export default function FacturesPage() {
               <div className="space-y-2 px-1">
                 {selectedInvoice.items.map((item, i) => (
                   <div key={i} className="flex justify-between items-center bg-white p-2.5 border border-gray-50 rounded-xl">
-                    <span className="font-bold text-gray-700 text-sm">{item.product.name} <span className="text-gray-400 font-medium ml-1">Ã— {item.quantity}</span></span>
+                    <span className="font-bold text-gray-700 text-sm">{item.product.name} <span className="text-gray-400 font-medium ml-1">× {item.quantity}</span></span>
                     <span className="font-bold text-gray-600">{formatDZD(item.priceBuy * item.quantity)}</span>
                   </div>
                 ))}
