@@ -201,50 +201,44 @@ export default function BonsPage() {
             />
           </div>
 
-          <div className="space-y-3">
+          <div className="bg-white rounded-2xl shadow-sm border border-[#dce8e6] divide-y divide-gray-50 overflow-hidden">
             {filtered.length === 0 ? (
-              <div className="rounded-[1.75rem] border border-dashed border-[#c9dcda] bg-white px-4 py-10 text-center text-sm font-medium text-gray-400">
+              <div className="px-4 py-8 text-center text-sm font-medium text-gray-400">
                 Aucun bon trouvé.
               </div>
             ) : (
               filtered.map(bon => (
-                <article key={bon.id} className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.24em] text-[#628b9a]">{bon.number}</p>
-                      <p className="mt-2 text-lg font-black leading-tight text-[#243740]">{bon.clientName}</p>
-                      <p className="mt-1 text-sm text-gray-500">{bon.clientPhone}</p>
+                <div
+                  key={bon.id}
+                  className="flex items-center justify-between p-3 active:bg-gray-50 transition-colors gap-3"
+                  onClick={() => setSelectedBon(bon)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-bold text-[#628b9a] bg-[#f0f7f6] px-1.5 py-0.5 rounded leading-none whitespace-nowrap uppercase tracking-tighter">
+                        {bon.number.split('-').pop()}
+                      </span>
+                      <p className="text-sm font-black text-[#243740] truncate">{bon.clientName}</p>
                     </div>
-                    <div className="rounded-2xl bg-[#ecf8f0] px-3 py-2 text-right text-[#41b86d]">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.18em]">Total</p>
-                      <p className="text-base font-black">{formatDZD(bon.total)}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className="text-[10px] text-gray-400">{new Date(bon.date).toLocaleDateString("fr-FR")}</p>
+                      <span className="h-1 w-1 bg-gray-200 rounded-full"></span>
+                      <p className="text-[10px] text-gray-400">{bon.items.length} art.</p>
                     </div>
                   </div>
-
-                  <div className="mt-4 flex items-center justify-between rounded-2xl bg-[#f7fbfa] px-3 py-3 text-sm text-gray-600">
-                    <span>{new Date(bon.date).toLocaleDateString("fr-FR")}</span>
-                    <span className="font-semibold">{bon.items.length} article{bon.items.length > 1 ? "s" : ""}</span>
-                  </div>
-
-                  <div className="mt-4 grid grid-cols-2 gap-3">
-                    <Button
-                      variant="outline"
-                      className="h-11 rounded-2xl border-[#41b86d]/20 text-[#41b86d] hover:bg-[#41b86d]/5"
-                      onClick={() => setSelectedBon(bon)}
+                  <div className="text-right flex items-center gap-3">
+                    <p className="text-sm font-black text-[#41b86d]">{formatDZD(bon.total)}</p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handlePrint(bon);
+                      }}
+                      className="p-2 text-gray-300 hover:text-[#41b86d]"
                     >
-                      <Eye className="mr-2 h-4 w-4" />
-                      Voir
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="h-11 rounded-2xl border-[#41b86d]/20 text-[#41b86d] hover:bg-[#41b86d]/5"
-                      onClick={() => handlePrint(bon)}
-                    >
-                      <Printer className="mr-2 h-4 w-4" />
-                      Imprimer
-                    </Button>
+                      <Printer className="h-4 w-4" />
+                    </button>
                   </div>
-                </article>
+                </div>
               ))
             )}
           </div>

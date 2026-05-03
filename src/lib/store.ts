@@ -141,9 +141,28 @@ export function addExpense(expense: Expense) {
   saveExpenses(updated);
 }
 
+// MULTI-STORE: Helper to dynamically resolve the current store prefix for isolating local storage data
+// When you migrate to Supabase, this logic will be replaced by passing `currentStore.id` 
+// to your Supabase queries like `.eq('store_id', currentStore.id)`
+function getStorePrefix(): string {
+  try {
+    const storedStore = localStorage.getItem('novadeco_selected_store');
+    if (storedStore) {
+      const store = JSON.parse(storedStore);
+      // Example: 'novadeco_magasin-principal_' instead of just 'novadeco_'
+      return `novadeco_${store.slug}_`;
+    }
+  } catch (e) {
+    console.error("Failed to parse store prefix", e);
+  }
+  return "novadeco_"; // Fallback
+}
+
 function load<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(`novadeco_${key}`);
+    // MULTI-STORE: Apply dynamic store prefix to simulate multi-tenant DB separation
+    const prefix = getStorePrefix();
+    const raw = localStorage.getItem(`${prefix}${key}`);
     return raw ? JSON.parse(raw) : fallback;
   } catch {
     return fallback;
@@ -151,7 +170,9 @@ function load<T>(key: string, fallback: T): T {
 }
 
 function save<T>(key: string, data: T) {
-  localStorage.setItem(`novadeco_${key}`, JSON.stringify(data));
+  // MULTI-STORE: Save using the store prefix
+  const prefix = getStorePrefix();
+  localStorage.setItem(`${prefix}${key}`, JSON.stringify(data));
 }
 
 export function getProducts(): Product[] {

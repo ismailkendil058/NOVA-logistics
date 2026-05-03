@@ -270,9 +270,9 @@ export default function InventairePage() {
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="bg-white rounded-2xl shadow-sm border border-[#dce8e6] divide-y divide-gray-50 overflow-hidden">
             {filtered.length === 0 ? (
-              <div className="rounded-[1.75rem] border border-dashed border-[#c9dcda] bg-white px-4 py-10 text-center text-sm font-medium text-gray-400">
+              <div className="px-4 py-10 text-center text-sm font-medium text-gray-400">
                 Aucun produit ne correspond aux filtres.
               </div>
             ) : (
@@ -280,54 +280,26 @@ export default function InventairePage() {
                 const category = CATEGORIES.find(item => item.key === product.category);
                 const isLow = product.stock <= (product.minStock ?? 5);
                 return (
-                  <article key={product.id} className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-base font-black leading-tight text-[#243740]">{product.name}</p>
-                          <button onClick={() => setEditingProduct(product)} className="text-gray-400 hover:text-[#41b86d]">
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                        <div className="mt-2 inline-flex rounded-full bg-[#eef5f4] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.18em] text-[#628b9a]">
-                          {category?.label}
-                        </div>
+                  <div
+                    key={product.id}
+                    className="flex items-center justify-between p-3 active:bg-gray-50 transition-colors gap-3"
+                    onClick={() => setEditingProduct(product)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-black text-[#243740] truncate">{product.name}</p>
+                      <p className="text-[10px] text-gray-400 mt-0.5 font-bold uppercase tracking-wider">{category?.label}</p>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <div className="hidden sm:block">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">Vente</p>
+                        <p className="text-xs font-black text-[#41b86d]">{formatPrice(product.priceSale).split(' ')[0]}</p>
                       </div>
-                      <div className="flex gap-2">
-                        <div className="rounded-2xl bg-gray-50 px-3 py-2 text-center border border-gray-100">
-                          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Q</p>
-                          <input
-                            type="number"
-                            value={product.minStock ?? 5}
-                            onChange={(e) => updateMinStock(product.id, parseInt(e.target.value) || 0)}
-                            className="bg-transparent text-lg font-black text-[#243740] w-10 text-center focus:outline-none"
-                          />
-                        </div>
-                        <div className={`rounded-2xl px-3 py-2 text-center ${isLow ? "bg-red-50 text-red-500" : "bg-[#ecf8f0] text-[#41b86d]"}`}>
-                          <p className="text-[10px] font-bold uppercase tracking-[0.2em]">Stock</p>
-                          <p className="text-lg font-black">{product.stock}</p>
-                        </div>
+                      <div className={`min-w-[45px] px-2 py-1.5 rounded-xl text-center ${isLow ? "bg-red-50 text-red-500" : "bg-[#ecf8f0] text-[#41b86d]"}`}>
+                        <p className="text-[8px] font-bold uppercase tracking-tighter opacity-60 leading-none mb-0.5">Stock</p>
+                        <p className="text-sm font-black leading-none">{product.stock}</p>
                       </div>
                     </div>
-
-                    <div className="mt-4 grid grid-cols-2 gap-3">
-                      <div className="rounded-2xl bg-[#f7fbfa] px-3 py-3 border border-gray-50">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Prix vente</p>
-                        <p className="mt-1 text-sm font-black text-[#41b86d]">{formatPrice(product.priceSale)}</p>
-                      </div>
-                      <div className="rounded-2xl bg-[#f7fbfa] px-3 py-3 border border-gray-50">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Prix achat</p>
-                        <p className="mt-1 text-sm font-black text-orange-600">{formatPrice(product.priceBuy)}</p>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 rounded-2xl bg-[#f7fbfa] px-3 py-3 border border-gray-50">
-                      <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400">Péremption</p>
-                      <p className="mt-1 text-sm font-semibold text-gray-600 truncate">
-                        {product.expiryDate ? new Date(product.expiryDate).toLocaleDateString("fr-FR") : "—"}
-                      </p>
-                    </div>
-                  </article>
+                  </div>
                 );
               })
             )}

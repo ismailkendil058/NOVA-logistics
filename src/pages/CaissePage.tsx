@@ -429,9 +429,15 @@ export default function CaissePage() {
               type="button"
               onClick={() => setMobileSection(option.id)}
               aria-pressed={mobileSection === option.id}
-              className={`flex-1 rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#628b9a] ${mobileSection === option.id ? "bg-[#628b9a] border-transparent text-white" : "bg-white border-gray-200 text-gray-600"}`}
+              className={`flex-1 rounded-2xl border px-3 py-2 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#628b9a] flex items-center justify-center gap-2 ${mobileSection === option.id ? "bg-[#628b9a] border-transparent text-white" : "bg-white border-gray-200 text-gray-600"}`}
             >
               {option.label}
+              {option.id === "cart" && cart.length > 0 && (
+                <span className={`inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[10px] font-black ${mobileSection === "cart" ? "bg-white text-[#628b9a]" : "bg-[#41b86d] text-white"
+                  }`}>
+                  {cart.length}
+                </span>
+              )}
             </button>
           ))}
         </div>

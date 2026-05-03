@@ -1,10 +1,13 @@
-import { BarChart3, FileText, Package, Receipt, ShoppingCart, Wallet } from "lucide-react";
+import { BarChart3, FileText, Package, Receipt, ShoppingCart, Wallet, Store, ArrowLeftRight } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
+// MULTI-STORE: Import Store context
+import { useStore } from "@/lib/StoreContext";
 
 const mobileNavItems = [
   { title: "Caisse", url: "/", icon: ShoppingCart },
   { title: "Bons", url: "/bons", icon: FileText },
+  { title: "Factures", url: "/factures", icon: Receipt },
   { title: "Crédit", url: "/credit", icon: Wallet },
   { title: "Stock", url: "/inventaire", icon: Package },
   { title: "Stats", url: "/analytique", icon: BarChart3 },
@@ -12,10 +15,30 @@ const mobileNavItems = [
 
 export function MobileLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const { currentStore, setStore } = useStore();
 
   return (
-    <div className="min-h-screen bg-[#eef5f4] text-gray-900">
-      <main className="mobile-safe-bottom min-h-screen">{children}</main>
+    <div className="min-h-screen bg-[#eef5f4] text-gray-900 flex flex-col">
+      {/* MULTI-STORE: Mobile Header for active store */}
+      {currentStore && (
+        <div className="bg-[#243740] w-full px-4 py-2 flex items-center justify-between z-50 sticky top-0 shadow-md">
+          <div className="flex items-center gap-2">
+            <Store className="h-4 w-4 text-[#41b86d]" />
+            <div>
+              <p className="text-[10px] text-gray-300 font-bold uppercase tracking-wider leading-tight">Magasin</p>
+              <p className="text-xs font-black text-white leading-tight">{currentStore.name}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setStore(null)}
+            className="flex items-center gap-1 bg-[#41b86d]/20 hover:bg-[#41b86d]/30 text-[#41b86d] px-2 py-1.5 rounded-lg transition-colors text-[10px] font-bold"
+          >
+            <ArrowLeftRight className="h-3 w-3" />
+            Changer
+          </button>
+        </div>
+      )}
+      <main className="mobile-safe-bottom flex-1">{children}</main>
       <nav className="mobile-bottom-nav fixed inset-x-0 bottom-0 z-40">
         <div className="mx-auto flex max-w-md items-center justify-between gap-2 rounded-t-[2rem] border border-white/70 bg-[#243740]/95 px-4 py-3 shadow-[0_-14px_40px_rgba(20,32,39,0.18)] backdrop-blur-xl">
           {mobileNavItems.map(item => {

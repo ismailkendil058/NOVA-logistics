@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { toast } from "sonner";
 
+import { useIsMobile } from "@/hooks/useIsMobile";
+
 export default function CreditPage() {
     const [credits, setCredits] = useState<Credit[]>([]);
     const [search, setSearch] = useState("");
@@ -15,6 +17,7 @@ export default function CreditPage() {
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [selectedCredit, setSelectedCredit] = useState<Credit | null>(null);
     const [payAmount, setPayAmount] = useState("");
+    const isMobile = useIsMobile();
 
     useEffect(() => {
         setCredits(getCredits());
@@ -69,124 +72,205 @@ export default function CreditPage() {
 
     const totalCreditAmount = credits.reduce((sum, c) => sum + (c.total - getPaidAmount(c)), 0);
 
-    return (
-        <div className="p-6 space-y-6 animate-fade-in bg-[#f4f8f8] min-h-screen font-sans">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-3xl font-black tracking-tight text-gray-800">Gestion des Crédits</h2>
-                    <p className="text-sm font-medium text-gray-500">Suivi des dettes et historique des versements</p>
-                </div>
-                <Card className="bg-orange-50 border-orange-100 shadow-sm min-w-[240px]">
-                    <CardContent className="pt-6">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-orange-500 p-2 rounded-lg text-white">
-                                <Banknote className="h-5 w-5" />
-                            </div>
+    const renderContent = () => {
+        if (isMobile) {
+            return (
+                <div className="space-y-4">
+                    <div className="rounded-[2rem] bg-[#f59e0b] px-5 py-5 text-white shadow-[0_18px_40px_rgba(245,158,11,0.18)]">
+                        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/60">Dettes Totales</p>
+                        <div className="mt-3 flex items-end justify-between gap-4">
                             <div>
-                                <p className="text-xs font-bold text-orange-600 uppercase tracking-widest">Total Dettes Clients</p>
-                                <p className="text-2xl font-black text-orange-700">{formatDZD(totalCreditAmount)}</p>
+                                <h2 className="text-3xl font-black tracking-tight">{formatDZD(totalCreditAmount)}</h2>
+                                <p className="mt-1 text-sm text-white/70">{filteredCredits.length} client{filteredCredits.length > 1 ? "s" : ""} en crédit</p>
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
+                    </div>
 
-            <Card className="border-0 shadow-sm bg-white overflow-hidden rounded-2xl">
-                <CardHeader className="border-b border-gray-100 pb-4">
-                    <div className="flex flex-col md:flex-row gap-4 md:items-center justify-between">
-                        <CardTitle className="text-lg font-bold text-gray-700">Liste des Crédits</CardTitle>
-                        <div className="relative w-full md:w-72">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <div className="rounded-[1.75rem] bg-white p-4 shadow-sm ring-1 ring-[#dce8e6]">
+                        <div className="relative">
+                            <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                             <Input
                                 placeholder="Rechercher un client..."
-                                className="pl-10 h-10 bg-gray-50 border-gray-100 focus:bg-white transition-all rounded-xl"
+                                className="h-12 rounded-2xl border-gray-200 bg-[#f7fbfa] pl-11 text-sm font-medium shadow-none focus-visible:ring-0"
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                             />
                         </div>
                     </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader className="bg-gray-50/50">
-                                <TableRow className="hover:bg-transparent border-gray-100">
-                                    <TableHead className="font-bold text-gray-400 py-4">Client</TableHead>
-                                    <TableHead className="font-bold text-gray-400">Date Initiale</TableHead>
-                                    <TableHead className="font-bold text-gray-400">Total</TableHead>
-                                    <TableHead className="font-bold text-gray-400">Versé</TableHead>
-                                    <TableHead className="font-bold text-gray-400">Reste</TableHead>
-                                    <TableHead className="text-right font-bold text-gray-400 pr-6">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredCredits.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={6} className="text-center py-20 text-gray-400">
-                                            Aucun crédit trouvé
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    filteredCredits.map((credit) => {
-                                        const paid = getPaidAmount(credit);
-                                        const remaining = credit.total - paid;
-                                        const isPaid = remaining <= 0;
 
-                                        return (
-                                            <TableRow key={credit.id} className="hover:bg-gray-50/50 transition-colors border-gray-50">
-                                                <TableCell className="py-4">
-                                                    <div className="flex flex-col gap-0.5">
-                                                        <span className="font-bold text-gray-800 flex items-center gap-2">
-                                                            <User className="h-3 w-3 text-gray-400" /> {credit.clientName}
+                    <div className="bg-white rounded-2xl shadow-sm border border-[#dce8e6] divide-y divide-gray-50 overflow-hidden">
+                        {filteredCredits.length === 0 ? (
+                            <div className="px-4 py-8 text-center text-sm font-medium text-gray-400">
+                                Aucun crédit trouvé.
+                            </div>
+                        ) : (
+                            filteredCredits.map(credit => {
+                                const paid = getPaidAmount(credit);
+                                const remaining = credit.total - paid;
+                                const isPaid = remaining <= 0;
+                                return (
+                                    <div
+                                        key={credit.id}
+                                        className="flex items-center justify-between p-3 active:bg-gray-50 transition-colors gap-3"
+                                        onClick={() => openHistoryModal(credit)}
+                                    >
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-black text-[#243740] truncate">{credit.clientName}</p>
+                                            <p className="text-[10px] text-gray-400 mt-0.5">{new Date(credit.date).toLocaleDateString('fr-DZ')}</p>
+                                        </div>
+                                        <div className="text-right flex items-center gap-2">
+                                            <div>
+                                                <p className={`text-sm font-black ${isPaid ? 'text-green-600' : 'text-orange-600'}`}>
+                                                    {isPaid ? "PAYÉ" : formatDZD(remaining)}
+                                                </p>
+                                                {!isPaid && <p className="text-[9px] font-bold text-gray-400">sur {formatDZD(credit.total)}</p>}
+                                            </div>
+                                            {!isPaid && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openPayModal(credit);
+                                                    }}
+                                                    className="p-2 text-blue-500 bg-blue-50 rounded-xl"
+                                                >
+                                                    <CheckCircle2 className="h-4 w-4" />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h2 className="text-3xl font-black tracking-tight text-gray-800">Gestion des Crédits</h2>
+                        <p className="text-sm font-medium text-gray-500">Suivi des dettes et historique des versements</p>
+                    </div>
+                    <Card className="bg-orange-50 border-orange-100 shadow-sm min-w-[240px]">
+                        <CardContent className="pt-6">
+                            <div className="flex items-center gap-3">
+                                <div className="bg-orange-500 p-2 rounded-lg text-white">
+                                    <Banknote className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-orange-600 uppercase tracking-widest">Total Dettes Clients</p>
+                                    <p className="text-2xl font-black text-orange-700">{formatDZD(totalCreditAmount)}</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <Card className="border-0 shadow-sm bg-white overflow-hidden rounded-2xl">
+                    <CardHeader className="border-b border-gray-100 pb-4">
+                        <div className="flex flex-col md:flex-row gap-4 md:items-center justify-between">
+                            <CardTitle className="text-lg font-bold text-gray-700">Liste des Crédits</CardTitle>
+                            <div className="relative w-full md:w-72">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                                <Input
+                                    placeholder="Rechercher un client..."
+                                    className="pl-10 h-10 bg-gray-50 border-gray-100 focus:bg-white transition-all rounded-xl"
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader className="bg-gray-50/50">
+                                    <TableRow className="hover:bg-transparent border-gray-100">
+                                        <TableHead className="font-bold text-gray-400 py-4">Client</TableHead>
+                                        <TableHead className="font-bold text-gray-400">Date Initiale</TableHead>
+                                        <TableHead className="font-bold text-gray-400">Total</TableHead>
+                                        <TableHead className="font-bold text-gray-400">Versé</TableHead>
+                                        <TableHead className="font-bold text-gray-400">Reste</TableHead>
+                                        <TableHead className="text-right font-bold text-gray-400 pr-6">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filteredCredits.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="text-center py-20 text-gray-400">
+                                                Aucun crédit trouvé
+                                            </TableCell>
+                                        </TableRow>
+                                    ) : (
+                                        filteredCredits.map((credit) => {
+                                            const paid = getPaidAmount(credit);
+                                            const remaining = credit.total - paid;
+                                            const isPaid = remaining <= 0;
+
+                                            return (
+                                                <TableRow key={credit.id} className="hover:bg-gray-50/50 transition-colors border-gray-50">
+                                                    <TableCell className="py-4">
+                                                        <div className="flex flex-col gap-0.5">
+                                                            <span className="font-bold text-gray-800 flex items-center gap-2">
+                                                                <User className="h-3 w-3 text-gray-400" /> {credit.clientName}
+                                                            </span>
+                                                            <span className="text-[10px] text-gray-500 flex items-center gap-2">
+                                                                <Phone className="h-3 w-3" /> {credit.clientPhone}
+                                                            </span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <span className="text-xs text-gray-600 flex items-center gap-2">
+                                                            <Calendar className="h-3 w-3 text-gray-400" /> {new Date(credit.date).toLocaleDateString('fr-DZ')}
                                                         </span>
-                                                        <span className="text-[10px] text-gray-500 flex items-center gap-2">
-                                                            <Phone className="h-3 w-3" /> {credit.clientPhone}
+                                                    </TableCell>
+                                                    <TableCell className="font-bold text-gray-700">{formatDZD(credit.total)}</TableCell>
+                                                    <TableCell className="font-bold text-green-600">{formatDZD(paid)}</TableCell>
+                                                    <TableCell>
+                                                        <span className={`px-2.5 py-1 rounded-full text-xs font-black ${isPaid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                            {isPaid ? "PAYÉ" : formatDZD(remaining)}
                                                         </span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <span className="text-xs text-gray-600 flex items-center gap-2">
-                                                        <Calendar className="h-3 w-3 text-gray-400" /> {new Date(credit.date).toLocaleDateString('fr-DZ')}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell className="font-bold text-gray-700">{formatDZD(credit.total)}</TableCell>
-                                                <TableCell className="font-bold text-green-600">{formatDZD(paid)}</TableCell>
-                                                <TableCell>
-                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-black ${isPaid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
-                                                        {isPaid ? "PAYÉ" : formatDZD(remaining)}
-                                                    </span>
-                                                </TableCell>
-                                                <TableCell className="text-right pr-6">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-8 text-gray-500 hover:text-[#41b86d] hover:bg-[#41b86d]/5 gap-2 font-bold"
-                                                            onClick={() => openHistoryModal(credit)}
-                                                        >
-                                                            <History className="h-4 w-4" /> Historique
-                                                        </Button>
-                                                        {!isPaid && (
+                                                    </TableCell>
+                                                    <TableCell className="text-right pr-6">
+                                                        <div className="flex items-center justify-end gap-2">
                                                             <Button
                                                                 variant="ghost"
                                                                 size="sm"
-                                                                className="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 gap-2 font-bold"
-                                                                onClick={() => openPayModal(credit)}
+                                                                className="h-8 text-gray-500 hover:text-[#41b86d] hover:bg-[#41b86d]/5 gap-2 font-bold"
+                                                                onClick={() => openHistoryModal(credit)}
                                                             >
-                                                                <CheckCircle2 className="h-4 w-4" /> Verser
+                                                                <History className="h-4 w-4" /> Historique
                                                             </Button>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
+                                                            {!isPaid && (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 gap-2 font-bold"
+                                                                    onClick={() => openPayModal(credit)}
+                                                                >
+                                                                    <CheckCircle2 className="h-4 w-4" /> Verser
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    </CardContent>
+                </Card>
+            </>
+        );
+    };
+
+    return (
+        <div className="p-6 space-y-6 animate-fade-in bg-[#f4f8f8] min-h-screen font-sans">
+            {renderContent()}
 
             {/* Pay Modal */}
             <Dialog open={showPayModal} onOpenChange={setShowPayModal}>
