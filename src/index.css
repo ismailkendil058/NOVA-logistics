@@ -67,7 +67,10 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  h1, h2, h3, h4 {
+  h1,
+  h2,
+  h3,
+  h4 {
     font-family: var(--font-serif);
     font-weight: 600;
     letter-spacing: -0.01em;
@@ -78,7 +81,35 @@
   .font-serif {
     font-family: var(--font-serif);
   }
+
   .font-sans {
     font-family: var(--font-sans);
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .print-only,
+  .print-only * {
+    visibility: visible !important;
+  }
+
+  .print-only {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    background: white;
+  }
+
+  @page {
+    size: A4;
+    margin: 1cm;
   }
 }

@@ -1,12 +1,13 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Search, Plus, Minus, Trash2, Paintbrush, Percent, PaintBucket, PaintRoller, Pipette, PaintbrushVertical, Frame, Droplets, Wrench, Package, ShoppingCart, FileText, Wallet, ArrowUpRight } from "lucide-react";
+import { Search, Plus, Minus, Trash2, Paintbrush, Percent, PaintBucket, PaintRoller, Pipette, PaintbrushVertical, Frame, Droplets, Wrench, Package, ShoppingCart, FileText, Wallet, ArrowUpRight, RotateCcw, Banknote } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   getProducts, CartItem, Product, CategoryType, CATEGORIES,
   formatDZD, generateId, addSale, addBon, updateProductStock, TeinteEntry,
-  getCustomCards, saveCustomCards, CustomSaleCard, addCredit, getCredits, updateCredit
+  getCustomCards, saveCustomCards, CustomSaleCard, addCredit, getCredits, updateCredit,
+  addExpense
 } from "@/lib/store";
 
 const categoryIcons: Record<CategoryType, React.ElementType> = {
@@ -101,6 +102,23 @@ export default function CaissePage() {
     { id: "cart", label: "Panier" },
   ] as const;
   const hasValidTempTeinteEntry = tempTeinteEntries.some(entry => (Number(entry.unitPrice) || 0) > 0 && (Number(entry.kg) || 0) > 0);
+
+  // Retour State
+  const [showRetourModal, setShowRetourModal] = useState(false);
+  const [retourSearch, setRetourSearch] = useState("");
+  const [selectedRetourProduct, setSelectedRetourProduct] = useState<Product | null>(null);
+  const [retourQty, setRetourQty] = useState("");
+  const [retourPrice, setRetourPrice] = useState("");
+
+  // Expense State
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [expenseReason, setExpenseReason] = useState("");
+  const [expenseAmount, setExpenseAmount] = useState("");
+
+  const retourFilteredProducts = useMemo(() => {
+    if (!retourSearch) return [];
+    return products.filter(p => p.name.toLowerCase().includes(retourSearch.toLowerCase()));
+  }, [products, retourSearch]);
   useEffect(() => {
     saveCustomCards(customCards);
   }, [customCards]);
@@ -348,6 +366,53 @@ export default function CaissePage() {
     setCheckoutMode("choice");
   };
 
+  const handleRetour = () => {
+    if (!selectedRetourProduct || !retourQty || !retourPrice) return;
+    const qty = Number(retourQty);
+    const price = Number(retourPrice);
+    const totalRetour = qty * price;
+
+    updateProductStock(selectedRetourProduct.id, qty);
+    addSale({
+      id: generateId(),
+      type: "retour",
+      items: [{
+        product: selectedRetourProduct,
+        quantity: qty,
+        subtotal: totalRetour,
+        weightKg: selectedRetourProduct.unit === "kg" ? qty : undefined
+      }],
+      teinteAmount: 0,
+      reduction: 0,
+      total: -totalRetour,
+      date: new Date().toISOString()
+    });
+
+    setShowRetourModal(false);
+    setSelectedRetourProduct(null);
+    setRetourQty("");
+    setRetourPrice("");
+    setRetourSearch("");
+    setProducts(getProducts());
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("novaInventoryUpdated"));
+    }
+  };
+
+  const handleExpense = () => {
+    if (!expenseReason || !expenseAmount) return;
+    addExpense({
+      id: generateId(),
+      reason: expenseReason,
+      amount: Number(expenseAmount),
+      date: new Date().toISOString(),
+      category: "caisse"
+    });
+    setShowExpenseModal(false);
+    setExpenseReason("");
+    setExpenseAmount("");
+  };
+
   return (
     <div className="flex min-h-screen flex-col lg:flex-row animate-fade-in bg-[#f4f8f8] font-sans">
       <div className="lg:hidden w-full border-b border-gray-200 bg-white px-4 pt-4 pb-3 shadow-sm z-10">
@@ -500,9 +565,29 @@ export default function CaissePage() {
       <div className={`${mobileSection === "products" ? "hidden" : ""} flex w-full flex-col bg-white border-l border-gray-200 z-10 shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.02)] lg:flex lg:w-[340px] xl:w-[360px]`}>
         <div className="flex items-center justify-between p-5 border-b border-gray-100 bg-white">
           <h3 className="text-xl font-bold tracking-tight text-gray-800">Panier</h3>
-          <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-[#41b86d] px-2 text-sm font-bold text-white lg:hidden">
-            {mobileCartCount}
-          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowRetourModal(true)}
+              className="h-9 gap-2 text-red-500 border-red-100 hover:bg-red-50 rounded-xl font-bold"
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span>Retour</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowExpenseModal(true)}
+              className="h-9 gap-2 text-orange-500 border-orange-100 hover:bg-orange-50 rounded-xl font-bold"
+            >
+              <Banknote className="h-4 w-4" />
+              <span>Dépense</span>
+            </Button>
+            <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-[#41b86d] px-2 text-sm font-bold text-white lg:hidden">
+              {mobileCartCount}
+            </span>
+          </div>
         </div>
 
         {/* Cart items */}
@@ -919,6 +1004,142 @@ export default function CaissePage() {
               </Button>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* Retour Modal */}
+      <Dialog open={showRetourModal} onOpenChange={setShowRetourModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <RotateCcw className="h-5 w-5" />
+              Retour de Produit
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Rechercher le produit</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Nom du produit..."
+                  className="pl-10 h-11 border-gray-200 rounded-xl"
+                  value={retourSearch}
+                  onChange={e => setRetourSearch(e.target.value)}
+                />
+              </div>
+
+              {retourFilteredProducts.length > 0 && !selectedRetourProduct && (
+                <div className="max-h-40 overflow-auto border border-gray-100 rounded-xl mt-1 bg-white shadow-lg">
+                  {retourFilteredProducts.map(p => (
+                    <button
+                      key={p.id}
+                      className="w-full p-3 text-left hover:bg-red-50 text-sm border-b border-gray-50 last:border-0"
+                      onClick={() => {
+                        setSelectedRetourProduct(p);
+                        setRetourPrice(p.priceSale.toString());
+                        setRetourSearch(p.name);
+                      }}
+                    >
+                      <p className="font-bold text-gray-800">{p.name}</p>
+                      <p className="text-xs text-gray-400">Stock actuel: {p.stock} • {formatDZD(p.priceSale)}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {selectedRetourProduct && (
+              <div className="bg-red-50 p-4 rounded-xl border border-red-100 space-y-4 animate-in fade-in zoom-in-95">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Produit Sélectionné</p>
+                    <p className="font-bold text-red-900">{selectedRetourProduct.name}</p>
+                  </div>
+                  <button className="text-xs font-bold text-red-500 hover:underline" onClick={() => setSelectedRetourProduct(null)}>Changer</button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Quantité</label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      className="h-11 border-red-200 focus:ring-red-500 rounded-lg font-bold"
+                      value={retourQty}
+                      onChange={e => setRetourQty(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Prix de vente</label>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      className="h-11 border-red-200 focus:ring-red-500 rounded-lg font-bold"
+                      value={retourPrice}
+                      onChange={e => setRetourPrice(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-red-100 flex justify-between items-center">
+                  <span className="text-sm font-bold text-red-700">Montant à rembourser</span>
+                  <span className="text-xl font-black text-red-600">
+                    {formatDZD((Number(retourQty) || 0) * (Number(retourPrice) || 0))}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <Button
+              className="w-full h-12 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg shadow-red-100"
+              disabled={!selectedRetourProduct || !retourQty || !retourPrice}
+              onClick={handleRetour}
+            >
+              Confirmer le Retour
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Expense Modal */}
+      <Dialog open={showExpenseModal} onOpenChange={setShowExpenseModal}>
+        <DialogContent className="sm:max-w-md bg-white border-0 shadow-2xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600 text-xl font-black">
+              <Banknote className="h-6 w-6" />
+              Enregistrer une Dépense
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 pt-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Motif de la dépense</label>
+              <Input
+                placeholder="Ex: Transport, Café, Papeterie..."
+                className="h-12 border-gray-100 bg-gray-50 rounded-xl font-medium focus:ring-orange-500"
+                value={expenseReason}
+                onChange={e => setExpenseReason(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Montant (DZD)</label>
+              <Input
+                type="number"
+                placeholder="0.00"
+                className="h-12 border-gray-100 bg-gray-50 rounded-xl font-black text-xl focus:ring-orange-500 text-orange-600"
+                value={expenseAmount}
+                onChange={e => setExpenseAmount(e.target.value)}
+              />
+            </div>
+
+            <Button
+              className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-lg shadow-orange-100 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              disabled={!expenseReason || !expenseAmount}
+              onClick={handleExpense}
+            >
+              Valider la Dépense
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

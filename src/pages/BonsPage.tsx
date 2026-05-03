@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
-import { Search, Eye, Edit3, Trash2 } from "lucide-react";
+import { Search, Eye, Edit3, Trash2, Printer } from "lucide-react";
+import { BonA4 } from "@/components/BonA4";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -20,6 +21,15 @@ export default function BonsPage() {
   const [editReduction, setEditReduction] = useState("");
   const products = getProducts();
   const isMobile = useIsMobile();
+  const [bonToPrint, setBonToPrint] = useState<Bon | null>(null);
+
+  const handlePrint = (bon: Bon) => {
+    setBonToPrint(bon);
+    setTimeout(() => {
+      window.print();
+      setBonToPrint(null);
+    }, 150);
+  };
 
   const filtered = useMemo(() => {
     return bons.filter(b => {
@@ -227,11 +237,11 @@ export default function BonsPage() {
                     </Button>
                     <Button
                       variant="outline"
-                      className="h-11 rounded-2xl border-[#628b9a]/20 text-[#628b9a] hover:bg-[#628b9a]/5"
-                      onClick={() => openEditBon(bon)}
+                      className="h-11 rounded-2xl border-[#41b86d]/20 text-[#41b86d] hover:bg-[#41b86d]/5"
+                      onClick={() => handlePrint(bon)}
                     >
-                      <Edit3 className="mr-2 h-4 w-4" />
-                      Modifier
+                      <Printer className="mr-2 h-4 w-4" />
+                      Imprimer
                     </Button>
                   </div>
                 </article>
@@ -293,6 +303,13 @@ export default function BonsPage() {
                   <span className="text-gray-800">Total</span>
                   <span className="text-[#39a05f]">{formatDZD(selectedBon.total)}</span>
                 </div>
+                <Button
+                  onClick={() => handlePrint(selectedBon)}
+                  className="w-full mt-4 bg-[#243740] hover:bg-[#2c4550] text-white rounded-2xl h-12 font-bold"
+                >
+                  <Printer className="mr-2 h-5 w-5" />
+                  Imprimer en A4
+                </Button>
               </div>
             )}
           </DialogContent>
@@ -467,6 +484,9 @@ export default function BonsPage() {
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-300 hover:text-[#628b9a] hover:bg-[#628b9a]/10 transition-colors" onClick={() => openEditBon(bon)}>
                       <Edit3 className="h-4 w-4" />
                     </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-300 hover:text-[#41b86d] hover:bg-[#41b86d]/10 transition-colors" onClick={() => handlePrint(bon)}>
+                      <Printer className="h-4 w-4" />
+                    </Button>
                   </td>
                 </tr>
               ))
@@ -537,6 +557,13 @@ export default function BonsPage() {
                 <span className="text-gray-800">Total</span>
                 <span className="text-[#39a05f]">{formatDZD(selectedBon.total)}</span>
               </div>
+              <Button
+                onClick={() => handlePrint(selectedBon)}
+                className="w-full mt-2 bg-[#3f5362] hover:bg-[#4b6375] text-white rounded-xl h-12 font-bold flex items-center justify-center transition-all active:scale-[0.98]"
+              >
+                <Printer className="mr-2 h-5 w-5" />
+                Imprimer le Bon en A4
+              </Button>
             </div>
           )}
         </DialogContent>
@@ -551,14 +578,14 @@ export default function BonsPage() {
           </DialogHeader>
           {editingBon && (
             <div className="space-y-4 pt-2">
-                <div className="space-y-1">
-                  <p className="text-[11px] uppercase tracking-widest text-gray-500">Client</p>
-                  <Input value={editClientName} onChange={e => handleClientNameChange(e.target.value)} placeholder="Nom complet" className="h-11 border-gray-200" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[11px] uppercase tracking-widest text-gray-500">Téléphone</p>
-                  <Input value={editClientPhone} onChange={e => handleClientPhoneChange(e.target.value)} placeholder="Numéro de téléphone" className="h-11 border-gray-200" />
-                </div>
+              <div className="space-y-1">
+                <p className="text-[11px] uppercase tracking-widest text-gray-500">Client</p>
+                <Input value={editClientName} onChange={e => handleClientNameChange(e.target.value)} placeholder="Nom complet" className="h-11 border-gray-200" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-[11px] uppercase tracking-widest text-gray-500">Téléphone</p>
+                <Input value={editClientPhone} onChange={e => handleClientPhoneChange(e.target.value)} placeholder="Numéro de téléphone" className="h-11 border-gray-200" />
+              </div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <p className="text-[11px] uppercase tracking-widest text-gray-500">Articles</p>
@@ -667,6 +694,7 @@ export default function BonsPage() {
           )}
         </DialogContent>
       </Dialog>
-  </div>
-);
+      {bonToPrint && <BonA4 bon={bonToPrint} />}
+    </div>
+  );
 }

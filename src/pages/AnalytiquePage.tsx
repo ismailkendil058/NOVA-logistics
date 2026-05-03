@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { getSales, formatDZD } from "@/lib/store";
+import { getSales, formatDZD, getExpenses } from "@/lib/store";
 import { Input } from "@/components/ui/input";
 
 export default function AnalytiquePage() {
   const [sales] = useState(getSales);
+  const [expenses] = useState(getExpenses);
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [day, setDay] = useState<string>("");
   const [mobileView, setMobileView] = useState<"kpis" | "history">("kpis");
@@ -16,6 +17,11 @@ export default function AnalytiquePage() {
     const prefix = day ? `${month}-${day.padStart(2, "0")}` : month;
     return sales.filter(s => s.date.startsWith(prefix));
   }, [sales, month, day]);
+
+  const monthlyExpenses = useMemo(() => {
+    const prefix = day ? `${month}-${day.padStart(2, "0")}` : month;
+    return expenses.filter(e => e.date.startsWith(prefix));
+  }, [expenses, month, day]);
 
   // All calendar days of the selected month
   const daysInMonth = useMemo(() => {
@@ -36,7 +42,8 @@ export default function AnalytiquePage() {
   const totalCost = monthlySales.reduce((s, sale) => {
     return s + sale.items.reduce((is, item) => is + getItemPurchaseCost(item), 0);
   }, 0);
-  const profit = totalRevenue - totalCost;
+  const totalExpenses = monthlyExpenses.reduce((s, e) => s + e.amount, 0);
+  const profit = totalRevenue - totalCost - totalExpenses;
 
   const [expandedDates, setExpandedDates] = useState<string[]>([]);
 
@@ -161,7 +168,8 @@ export default function AnalytiquePage() {
           {[
             { label: "Chiffre d'affaires", value: formatDZD(totalRevenue), color: "text-[#3f5362]" },
             { label: "Coût d'achat", value: formatDZD(totalCost), color: "text-red-500" },
-            { label: "Bénéfice", value: formatDZD(profit), color: "text-[#41b86d]" },
+            { label: "Dépenses", value: formatDZD(totalExpenses), color: "text-orange-500" },
+            { label: "Bénéfice Net", value: formatDZD(profit), color: "text-[#41b86d]" },
             { label: "La Teinte", value: formatDZD(totalTeinte), color: "text-[#628b9a]" },
           ].map((kpi, i) => (
             <div key={i} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-center">

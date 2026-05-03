@@ -75,7 +75,7 @@ export interface Credit {
 
 export interface Sale {
   id: string;
-  type: "direct" | "bon" | "credit";
+  type: "direct" | "bon" | "credit" | "retour";
   bonId?: string;
   creditId?: string;
   items: CartItem[];
@@ -101,14 +101,44 @@ export interface InvoiceItem {
   expiryDate?: string;
 }
 
+export interface InvoicePayment {
+  id: string;
+  amount: number;
+  date: string;
+}
+
 export interface Invoice {
   id: string;
   number: string;
   supplier: Supplier;
   items: InvoiceItem[];
   total: number;
+  paidAmount: number;
+  payments: InvoicePayment[];
   date: string;
   type: "achat" | "retour";
+}
+
+export interface Expense {
+  id: string;
+  reason: string;
+  amount: number;
+  date: string;
+  category: string;
+}
+
+export function getExpenses(): Expense[] {
+  return load<Expense[]>("expenses", []);
+}
+
+export function saveExpenses(expenses: Expense[]) {
+  save("expenses", expenses);
+}
+
+export function addExpense(expense: Expense) {
+  const expenses = getExpenses();
+  const updated = [expense, ...expenses];
+  saveExpenses(updated);
 }
 
 function load<T>(key: string, fallback: T): T {

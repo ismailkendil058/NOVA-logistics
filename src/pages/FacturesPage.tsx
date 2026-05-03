@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Plus, RotateCcw, Search, Eye, ArrowLeft, Package, PackagePlus, X, Pencil } from "lucide-react";
+import { Plus, RotateCcw, Search, Eye, ArrowLeft, Package, PackagePlus, X, Pencil, Wallet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -41,18 +41,23 @@ export default function FacturesPage() {
   const [view, setView] = useState<View>("list");
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  const [showOnlyCredits, setShowOnlyCredits] = useState(false);
 
   // Add form state
   const [newSupplier, setNewSupplier] = useState({ name: "", phone: "", address: "" });
   const [invoiceDate, setInvoiceDate] = useState(new Date().toISOString().split("T")[0]);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceFormItem[]>([]);
   const [draftInvoiceItem, setDraftInvoiceItem] = useState<InvoiceFormItem>(createInvoiceFormItem());
+  const [initialPaid, setInitialPaid] = useState("");
   const [showSupplierSuggestions, setShowSupplierSuggestions] = useState(false);
   const [showProductSuggestions, setShowProductSuggestions] = useState<number | "draft" | null>(null);
 
   // Return form state
   const [returnInvoiceId, setReturnInvoiceId] = useState("");
   const [returnItems, setReturnItems] = useState<{ idx: number; quantity: number }[]>([]);
+  const [invoiceForPayment, setInvoiceForPayment] = useState<Invoice | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+
   const isMobile = useIsMobile();
 
   const supplierSuggestions = useMemo(() => {
@@ -69,9 +74,10 @@ export default function FacturesPage() {
     return invoices.filter(inv => {
       const matchSearch = !search || inv.supplier.name.toLowerCase().includes(search.toLowerCase()) || inv.number.includes(search);
       const matchDate = !dateFilter || inv.date.startsWith(dateFilter);
-      return matchSearch && matchDate;
+      const matchCredit = !showOnlyCredits || (inv.total - (inv.paidAmount || 0) > 1);
+      return matchSearch && matchDate && matchCredit;
     });
-  }, [invoices, search, dateFilter]);
+  }, [invoices, search, dateFilter, showOnlyCredits]);
 
   const updateDraftInvoiceItem = <K extends keyof InvoiceFormItem>(key: K, value: InvoiceFormItem[K]) => {
     setDraftInvoiceItem(prev => ({ ...prev, [key]: value }));
@@ -144,12 +150,17 @@ export default function FacturesPage() {
     saveProducts(updatedProducts);
     setProducts(updatedProducts);
 
+    const total = items.reduce((s, i) => s + i.priceBuy * i.quantity, 0);
+    const paid = Number(initialPaid) || 0;
+
     const invoice: Invoice = {
       id: generateId(),
       number: `FAC-${Date.now().toString().slice(-6)}`,
       supplier,
       items,
-      total: items.reduce((s, i) => s + i.priceBuy * i.quantity, 0),
+      total,
+      paidAmount: paid,
+      payments: paid > 0 ? [{ id: generateId(), amount: paid, date: invoiceDate }] : [],
       date: invoiceDate,
       type: "achat",
     };
@@ -220,17 +231,28 @@ export default function FacturesPage() {
     saveProducts(updatedProducts);
     setProducts(updatedProducts);
 
+    const total = newItems.reduce((s, i) => s + i.priceBuy * i.quantity, 0);
+    const paid = Number(initialPaid) || 0;
+
     const updatedInvoice: Invoice = {
       ...oldInvoice,
       supplier,
       items: newItems,
-      total: newItems.reduce((s, i) => s + i.priceBuy * i.quantity, 0),
+      total,
+      paidAmount: paid,
+      // Preserve existing payments and update the first one if it exists
+      payments: (oldInvoice.payments && oldInvoice.payments.length > 0)
+        ? [{ ...oldInvoice.payments[0], amount: paid, date: invoiceDate }, ...oldInvoice.payments.slice(1)]
+        : (paid > 0 ? [{ id: generateId(), amount: paid, date: invoiceDate }] : []),
       date: invoiceDate,
     };
 
-    const updatedInvoices = invoices.map(inv => inv.id === editingInvoiceId ? updatedInvoice : inv);
-    saveInvoices(updatedInvoices);
-    setInvoices(updatedInvoices);
+    setInvoices(prev => {
+      const updated = prev.map(inv => inv.id === editingInvoiceId ? updatedInvoice : inv);
+      saveInvoices(updated);
+      return updated;
+    });
+
     resetAddForm();
     setEditingInvoiceId(null);
     setView("list");
@@ -238,6 +260,7 @@ export default function FacturesPage() {
 
   const startEditing = (invoice: Invoice) => {
     setEditingInvoiceId(invoice.id);
+    setInitialPaid(invoice.paidAmount?.toString() || "");
     setNewSupplier({ name: invoice.supplier.name, phone: invoice.supplier.phone || "", address: invoice.supplier.address || "" });
     setShowSupplierSuggestions(false);
     setInvoiceDate(invoice.date);
@@ -271,6 +294,8 @@ export default function FacturesPage() {
       supplier: original.supplier,
       items: returnedItems,
       total: returnedItems.reduce((s, i) => s + i.priceBuy * i.quantity, 0),
+      paidAmount: 0,
+      payments: [],
       date: new Date().toISOString().split("T")[0],
       type: "retour",
     };
@@ -284,11 +309,31 @@ export default function FacturesPage() {
     setView("list");
   };
 
+  const handleAddPayment = () => {
+    if (!invoiceForPayment || !paymentAmount) return;
+    const amount = Number(paymentAmount);
+    const newPayment = { id: generateId(), amount, date: new Date().toISOString() };
+    const updatedInvoice: Invoice = {
+      ...invoiceForPayment,
+      paidAmount: (invoiceForPayment.paidAmount || 0) + amount,
+      payments: [...(invoiceForPayment.payments || []), newPayment]
+    };
+    const updatedInvoices = invoices.map(inv => (inv.id === updatedInvoice.id ? updatedInvoice : inv));
+    saveInvoices(updatedInvoices);
+    setInvoices(updatedInvoices);
+    setPaymentAmount("");
+    setInvoiceForPayment(null);
+    if (selectedInvoice?.id === updatedInvoice.id) {
+      setSelectedInvoice(updatedInvoice);
+    }
+  };
+
   const resetAddForm = () => {
     setNewSupplier({ name: "", phone: "", address: "" });
     setShowSupplierSuggestions(false);
     setInvoiceItems([]);
     setDraftInvoiceItem(createInvoiceFormItem());
+    setInitialPaid("");
     setInvoiceDate(new Date().toISOString().split("T")[0]);
   };
 
@@ -588,7 +633,18 @@ export default function FacturesPage() {
                   <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/50">Total facture</p>
                   <p className="mt-1 text-2xl font-black">{formatDZD(invoiceTotal)}</p>
                 </div>
+                <div className="flex-1 max-w-[140px]">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-white/50 text-right">Déjà Payé</p>
+                  <Input
+                    type="number"
+                    placeholder="0"
+                    value={initialPaid}
+                    onChange={e => setInitialPaid(e.target.value)}
+                    className="h-10 bg-white/10 border-white/20 text-white font-bold text-right mt-1"
+                  />
+                </div>
                 <Button
+                  type="button"
                   onClick={view === "edit" ? handleUpdateInvoice : handleSubmitInvoice}
                   disabled={invoiceItems.length === 0}
                   className="h-12 rounded-2xl bg-[#41b86d] px-5 font-bold text-white hover:bg-[#39a05f]"
@@ -622,6 +678,7 @@ export default function FacturesPage() {
               </div>
             </div>
             <Button
+              type="button"
               onClick={view === "edit" ? handleUpdateInvoice : handleSubmitInvoice}
               disabled={invoiceItems.length === 0}
               className="bg-[#41b86d] hover:bg-[#39a05f] text-white shadow-sm font-bold h-11 px-6 rounded-xl disabled:opacity-40"
@@ -1402,6 +1459,14 @@ export default function FacturesPage() {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
+        <Button
+          variant="outline"
+          onClick={() => setShowOnlyCredits(!showOnlyCredits)}
+          className={`h-12 rounded-xl border-gray-200 font-bold transition-all ${showOnlyCredits ? "bg-orange-500 text-white border-orange-500" : "bg-white text-gray-600"
+            }`}
+        >
+          {showOnlyCredits ? "Voir Tout" : "Factures à Crédit"}
+        </Button>
         <Input
           type="date"
           className="w-48 bg-white border-gray-200 h-12 shadow-sm rounded-xl font-medium focus-visible:ring-0"
@@ -1419,6 +1484,7 @@ export default function FacturesPage() {
               <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">Date</th>
               <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">Type</th>
               <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">Total</th>
+              <th className="text-center px-6 py-4 font-bold text-xs uppercase tracking-widest text-gray-400">Reste</th>
               <th className="px-6 py-4"></th>
             </tr>
           </thead>
@@ -1442,6 +1508,9 @@ export default function FacturesPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center font-black text-[#41b86d]">{formatDZD(inv.total)}</td>
+                  <td className={`px-6 py-4 text-center font-bold ${inv.total - (inv.paidAmount || 0) > 0 ? "text-orange-500" : "text-gray-300"}`}>
+                    {inv.total - (inv.paidAmount || 0) > 0 ? formatDZD(inv.total - (inv.paidAmount || 0)) : "—"}
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Button
@@ -1452,6 +1521,17 @@ export default function FacturesPage() {
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
+                      {(inv.total - (inv.paidAmount || 0) > 1 && inv.type === "achat") && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-gray-300 hover:text-orange-500 hover:bg-orange-50 transition-colors"
+                          onClick={() => setInvoiceForPayment(inv)}
+                          title="Enregistrer un paiement"
+                        >
+                          <Wallet className="h-4 w-4" />
+                        </Button>
+                      )}
                       {inv.type === "achat" && (
                         <Button
                           variant="ghost"
@@ -1505,10 +1585,88 @@ export default function FacturesPage() {
                   </div>
                 ))}
               </div>
-              <div className="border-t border-gray-100 pt-4 flex justify-between items-center text-xl font-black">
-                <span className="text-gray-800">Total</span>
-                <span className="text-[#41b86d]">{formatDZD(selectedInvoice.total)}</span>
+              <div className="border-t border-gray-100 pt-4 space-y-2">
+                <div className="flex justify-between items-center text-sm font-bold">
+                  <span className="text-gray-500">Total Facture</span>
+                  <span className="text-gray-800">{formatDZD(selectedInvoice.total)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm font-bold">
+                  <span className="text-gray-500">Montant Payé</span>
+                  <span className="text-[#41b86d]">{formatDZD(selectedInvoice.paidAmount || 0)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xl font-black pt-2 border-t border-gray-100">
+                  <span className="text-gray-800">Reste à payer</span>
+                  <span className="text-orange-500">{formatDZD(selectedInvoice.total - (selectedInvoice.paidAmount || 0))}</span>
+                </div>
               </div>
+
+              {selectedInvoice.payments && selectedInvoice.payments.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Historique des paiements</h4>
+                  <div className="space-y-2 max-h-32 overflow-auto pr-1">
+                    {selectedInvoice.payments.map((p, i) => (
+                      <div key={p.id} className="flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100/50">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] font-bold text-gray-400">Versement #{i + 1}</span>
+                          <span className="text-xs font-bold text-gray-600">{new Date(p.date).toLocaleDateString("fr-FR")}</span>
+                        </div>
+                        <span className="font-bold text-[#41b86d]">{formatDZD(p.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!invoiceForPayment} onOpenChange={(open) => !open && setInvoiceForPayment(null)}>
+        <DialogContent className="sm:max-w-md bg-white border-0 shadow-xl rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold tracking-tight border-b border-gray-100 pb-4">
+              Enregistrer un paiement
+            </DialogTitle>
+          </DialogHeader>
+          {invoiceForPayment && (
+            <div className="space-y-6 pt-2">
+              <div className="bg-gray-50 p-4 rounded-xl space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Facture</span>
+                  <span className="font-mono font-bold text-gray-600">{invoiceForPayment.number}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Total</span>
+                  <span className="font-bold text-gray-800">{formatDZD(invoiceForPayment.total)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-400">Déjà payé</span>
+                  <span className="font-bold text-[#41b86d]">{formatDZD(invoiceForPayment.paidAmount || 0)}</span>
+                </div>
+                <div className="flex justify-between text-lg font-black pt-2 border-t border-gray-100">
+                  <span className="text-gray-900">Reste</span>
+                  <span className="text-orange-500">{formatDZD(invoiceForPayment.total - (invoiceForPayment.paidAmount || 0))}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block ml-1">Montant du versement</label>
+                <Input
+                  type="number"
+                  placeholder="0.00"
+                  className="h-12 border-gray-200 rounded-xl font-bold text-lg focus:ring-orange-500"
+                  value={paymentAmount}
+                  onChange={e => setPaymentAmount(e.target.value)}
+                />
+              </div>
+
+              <Button
+                onClick={handleAddPayment}
+                disabled={!paymentAmount || Number(paymentAmount) <= 0}
+                className="w-full h-12 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-lg shadow-orange-100 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              >
+                Confirmer le paiement
+              </Button>
             </div>
           )}
         </DialogContent>
