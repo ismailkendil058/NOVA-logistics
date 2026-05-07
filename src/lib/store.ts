@@ -15,7 +15,10 @@ export interface Product {
   expiryDate?: string;
 }
 
-export type CategoryType = "satine" | "enduit" | "vinyle" | "laque" | "decor" | "fixateur" | "accessoires";
+export type CategoryType =
+  | "satine" | "enduit" | "vinyle" | "laque" | "decor" | "fixateur" | "accessoires"
+  | "placo" | "vis" | "platre" | "electricite";
+
 
 export interface CartItem {
   product: Product;
@@ -319,12 +322,38 @@ export function formatDZD(amount: number): string {
   return new Intl.NumberFormat("fr-DZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount) + " DZD";
 }
 
-export const CATEGORIES: { key: CategoryType; label: string; labelAr: string }[] = [
-  { key: "satine", label: "Satiné", labelAr: "ساتيني" },
-  { key: "enduit", label: "Enduit", labelAr: "معجون" },
-  { key: "vinyle", label: "Vinyle", labelAr: "فينيل" },
-  { key: "laque", label: "Laque", labelAr: "لاك" },
-  { key: "decor", label: "Décor", labelAr: "ديكور" },
-  { key: "fixateur", label: "Fixateur", labelAr: "مثبت" },
-  { key: "accessoires", label: "Accessoires", labelAr: "إكسسوارات" },
-];
+export const CATEGORIES_MAP: Record<string, { key: CategoryType; label: string; labelAr: string }[]> = {
+  "magasin-principal": [
+    { key: "satine", label: "Satiné", labelAr: "ساتيني" },
+    { key: "enduit", label: "Enduit", labelAr: "معجون" },
+    { key: "vinyle", label: "Vinyle", labelAr: "فينيل" },
+    { key: "laque", label: "Laque", labelAr: "لاك" },
+    { key: "decor", label: "Décor", labelAr: "ديكور" },
+    { key: "fixateur", label: "Fixateur", labelAr: "مثبت" },
+    { key: "accessoires", label: "Accessoires", labelAr: "إكسسوارات" },
+  ],
+  "placo": [
+    { key: "placo", label: "Placo", labelAr: "بلاكو" },
+    { key: "vis", label: "Les Vis", labelAr: "براغي" },
+    { key: "accessoires", label: "Les Accessoires", labelAr: "إكسسوارات" },
+    { key: "enduit", label: "Les Enduit", labelAr: "معجون" },
+    { key: "platre", label: "Platre", labelAr: "جبس" },
+    { key: "electricite", label: "Électricité", labelAr: "كهرباء" },
+  ]
+};
+
+export const getStoreSlug = (): string => {
+  try {
+    const storedStore = localStorage.getItem('novadeco_selected_store');
+    if (storedStore) return JSON.parse(storedStore).slug;
+  } catch (e) { console.error(e); }
+  return "magasin-principal";
+};
+
+export const getCategories = () => {
+  const slug = getStoreSlug();
+  return CATEGORIES_MAP[slug] || CATEGORIES_MAP["magasin-principal"];
+};
+
+export const CATEGORIES = getCategories();
+

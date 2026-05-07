@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { Search, Plus, Minus, Trash2, Paintbrush, Percent, PaintBucket, PaintRoller, Pipette, PaintbrushVertical, Frame, Droplets, Wrench, Package, ShoppingCart, FileText, Wallet, ArrowUpRight, RotateCcw, Banknote } from "lucide-react";
+import { Search, Plus, Minus, Trash2, Paintbrush, Percent, PaintBucket, PaintRoller, Pipette, PaintbrushVertical, Frame, Droplets, Wrench, Package, ShoppingCart, FileText, Wallet, ArrowUpRight, RotateCcw, Banknote, Zap, Layers, Hammer, BoxSelect } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  getProducts, CartItem, Product, CategoryType, CATEGORIES,
+  getProducts, CartItem, Product, CategoryType, getCategories,
   formatDZD, generateId, addSale, addBon, updateProductStock, TeinteEntry,
   getCustomCards, saveCustomCards, CustomSaleCard, addCredit, getCredits, updateCredit,
   addExpense
@@ -18,6 +18,10 @@ const categoryIcons: Record<CategoryType, React.ElementType> = {
   decor: Frame,
   fixateur: Droplets,
   accessoires: Wrench,
+  placo: Layers,
+  vis: Hammer,
+  platre: BoxSelect,
+  electricite: Zap,
 };
 
 const categoryColors: Record<CategoryType, string> = {
@@ -28,7 +32,12 @@ const categoryColors: Record<CategoryType, string> = {
   decor: "bg-[#a686b8] hover:bg-[#9676a8] text-white",
   fixateur: "bg-[#e26c6d] hover:bg-[#d25c5d] text-white",
   accessoires: "bg-[#e6a861] hover:bg-[#d69851] text-white",
+  placo: "bg-[#628b9a] hover:bg-[#527b8a] text-white",
+  vis: "bg-[#5a626a] hover:bg-[#4a525a] text-white",
+  platre: "bg-[#9bc7d8] hover:bg-[#8ab8c9] text-white",
+  electricite: "bg-[#e26c6d] hover:bg-[#d25c5d] text-white",
 };
+
 
 const customizableCategories = new Set<CategoryType>(["satine", "vinyle", "enduit", "laque", "fixateur"]);
 
@@ -465,7 +474,7 @@ export default function CaissePage() {
         {/* Category filters - mobile */}
         <div className="mobile-scroll-x flex gap-2 overflow-x-auto pb-3 lg:hidden">
           <div className="flex min-w-max gap-2">
-            {CATEGORIES.map(cat => {
+            {getCategories().map(cat => {
               const CategoryIcon = categoryIcons[cat.key];
 
               return (
@@ -482,6 +491,7 @@ export default function CaissePage() {
             })}
           </div>
         </div>
+
 
         {/* Product Grid */}
         <div className="flex-1 overflow-auto rounded-lg mb-4">
@@ -548,7 +558,7 @@ export default function CaissePage() {
         {/* Category filters */}
         <div className="mobile-scroll-x hidden gap-2 overflow-x-auto pt-2 border-t border-gray-200 pb-1 lg:flex">
           <div className="flex min-w-max gap-2 md:mx-auto">
-            {CATEGORIES.map(cat => {
+            {getCategories().map(cat => {
               const CategoryIcon = categoryIcons[cat.key];
 
               return (
@@ -565,6 +575,7 @@ export default function CaissePage() {
             })}
           </div>
         </div>
+
       </div>
 
       {/* Right panel — Cart */}

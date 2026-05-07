@@ -4,7 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getProducts, CATEGORIES, saveProducts, Product } from "@/lib/store";
+import { getProducts, getCategories, saveProducts, Product } from "@/lib/store";
+
 import { useIsMobile } from "@/hooks/useIsMobile";
 
 // Custom formatter for Inventaire to remove .00
@@ -122,7 +123,7 @@ export default function InventairePage() {
                   <SelectValue placeholder="Catégorie" />
                 </SelectTrigger>
                 <SelectContent className="rounded-2xl border-gray-100 shadow-xl">
-                  {CATEGORIES.map(c => (
+                  {getCategories().map(c => (
                     <SelectItem key={c.key} value={c.key}>{c.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -257,7 +258,7 @@ export default function InventairePage() {
               >
                 Toutes
               </button>
-              {CATEGORIES.map(category => (
+              {getCategories().map(category => (
                 <button
                   key={category.key}
                   type="button"
@@ -277,7 +278,7 @@ export default function InventairePage() {
               </div>
             ) : (
               filtered.map(product => {
-                const category = CATEGORIES.find(item => item.key === product.category);
+                const category = getCategories().find(item => item.key === product.category);
                 const isLow = product.stock <= (product.minStock ?? 5);
                 return (
                   <div
@@ -345,7 +346,7 @@ export default function InventairePage() {
         </div>
         <select className="px-4 py-2 h-12 bg-white rounded-xl shadow-sm border border-gray-200 text-sm font-bold text-gray-600 focus:outline-none" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
           <option value="">Toutes catégories</option>
-          {CATEGORIES.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+          {getCategories().map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
         </select>
       </div>
 
@@ -365,7 +366,7 @@ export default function InventairePage() {
           </thead>
           <tbody>
             {filtered.map(p => {
-              const cat = CATEGORIES.find(c => c.key === p.category);
+              const cat = getCategories().find(c => c.key === p.category);
               const isLow = p.stock <= (p.minStock ?? 5);
               return (
                 <tr key={p.id} className="border-b last:border-0 border-gray-50 hover:bg-[#f0fbf4]/40 transition-colors">
