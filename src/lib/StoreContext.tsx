@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { syncFromSupabase } from './store';
+import { supabase } from './supabase';
 
 // MULTI-STORE: Definition of the Store entity
 export interface Store {
@@ -10,7 +12,7 @@ export interface Store {
 // MULTI-STORE: Definition of the Context layout
 interface StoreContextType {
     currentStore: Store | null;
-    setStore: (store: Store | null) => void;
+    setStore: (store: Store | null) => Promise<void>;
     isLoading: boolean;
 }
 
@@ -22,28 +24,52 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        // MULTI-STORE: Retrieve persisted store selection from localStorage on load
-        const storedStore = localStorage.getItem('novadeco_selected_store');
-        if (storedStore) {
-            try {
-                setCurrentStoreState(JSON.parse(storedStore));
-            } catch (e) {
-                console.error("Failed to parse store", e);
+        const initStore = async () => {
+            const storedStore = localStorage.getItem('novadeco_selected_store');
+            if (storedStore) {
+                try {
+                    const store = JSON.parse(storedStore);
+                    setCurrentStoreState(store);
+                    await syncFromSupabase();
+                } catch (e) {
+                    console.error("Failed to parse store", e);
+                }
             }
-        }
-        setIsLoading(false);
+            setIsLoading(false);
+        };
+        initStore();
     }, []);
 
-    const setStore = (store: Store | null) => {
+    // REALTIME: Listen for changes on critical tables
+    useEffect(() => {
+        if (!currentStore) return;
+
+        const channel = supabase
+            .channel('db-changes')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'products', filter: `store_id=eq.${currentStore.id}` }, () => {
+                syncFromSupabase();
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'sales', filter: `store_id=eq.${currentStore.id}` }, () => {
+                syncFromSupabase();
+            })
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [currentStore]);
+
+    const setStore = async (store: Store | null) => {
+        setIsLoading(true);
         setCurrentStoreState(store);
         if (store) {
-            // MULTI-STORE: Persist selected store in localStorage
             localStorage.setItem('novadeco_selected_store', JSON.stringify(store));
-            // MULTI-STORE: Dispatch a global event so listeners know the store changed
+            await syncFromSupabase();
             window.dispatchEvent(new Event("novaStoreUpdated"));
         } else {
             localStorage.removeItem('novadeco_selected_store');
         }
+        setIsLoading(false);
     };
 
     return (

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useStore, Store } from "@/lib/StoreContext";
 import { Store as StoreIcon, ArrowRight, Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/lib/supabase";
 
 // MULTI-STORE: Component to render the store selection UI before dashboard
 export default function StoreSelector() {
@@ -24,16 +25,29 @@ export default function StoreSelector() {
         const fetchStores = async () => {
             setIsLoading(true);
             try {
-                // Simulate network delay
-                await new Promise(resolve => setTimeout(resolve, 800));
+                const { data, error } = await supabase.from('stores').select('*').eq('is_active', true);
+                if (error) throw error;
 
-                // MULTI-STORE: Renamed "Succursale" to "Placo" as requested
+                if (data && data.length > 0) {
+                    setStores(data.map(s => ({
+                        id: s.id,
+                        name: s.name,
+                        slug: s.slug
+                    })));
+                } else {
+                    // Fallback to defaults if DB is empty
+                    setStores([
+                        { id: "store-1", name: "Nova Deco - Magasin Principal", slug: "magasin-principal" },
+                        { id: "store-2", name: "Nova Deco - Placo", slug: "placo" },
+                    ]);
+                }
+            } catch (error) {
+                console.error("Failed to fetch stores", error);
+                // Fallback for offline/no DB
                 setStores([
                     { id: "store-1", name: "Nova Deco - Magasin Principal", slug: "magasin-principal" },
                     { id: "store-2", name: "Nova Deco - Placo", slug: "placo" },
                 ]);
-            } catch (error) {
-                console.error("Failed to fetch stores", error);
             } finally {
                 setIsLoading(false);
             }

@@ -1,4 +1,6 @@
-// NOVA DECO - Data Store (localStorage-backed)
+// NOVA DECO - Data Store (Supabase 100% Integration)
+import { supabase } from "./supabase";
+import * as sync from "./supabaseSync";
 
 export interface Product {
   id: string;
@@ -127,107 +129,98 @@ export interface Expense {
   category: string;
 }
 
-export function getExpenses(): Expense[] {
-  return load<Expense[]>("expenses", []);
+// MULTI-STORE: Helpers
+function getStoreId(): string | null {
+  try {
+    const storedStore = localStorage.getItem('novadeco_selected_store');
+    if (storedStore) return JSON.parse(storedStore).id;
+  } catch (e) { console.error(e); }
+  return null;
 }
 
-export function saveExpenses(expenses: Expense[]) {
-  save("expenses", expenses);
-}
-
-export function addExpense(expense: Expense) {
-  const expenses = getExpenses();
-  const updated = [expense, ...expenses];
-  saveExpenses(updated);
-}
-
-// MULTI-STORE: Helper to dynamically resolve the current store prefix for isolating local storage data
-// When you migrate to Supabase, this logic will be replaced by passing `currentStore.id` 
-// to your Supabase queries like `.eq('store_id', currentStore.id)`
 function getStorePrefix(): string {
   try {
     const storedStore = localStorage.getItem('novadeco_selected_store');
     if (storedStore) {
       const store = JSON.parse(storedStore);
-      // Example: 'novadeco_magasin-principal_' instead of just 'novadeco_'
       return `novadeco_${store.slug}_`;
     }
-  } catch (e) {
-    console.error("Failed to parse store prefix", e);
-  }
-  return "novadeco_"; // Fallback
+  } catch (e) { console.error(e); }
+  return "novadeco_";
 }
 
 function load<T>(key: string, fallback: T): T {
   try {
-    // MULTI-STORE: Apply dynamic store prefix to simulate multi-tenant DB separation
     const prefix = getStorePrefix();
     const raw = localStorage.getItem(`${prefix}${key}`);
     return raw ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
+  } catch { return fallback; }
 }
 
 function save<T>(key: string, data: T) {
-  // MULTI-STORE: Save using the store prefix
   const prefix = getStorePrefix();
   localStorage.setItem(`${prefix}${key}`, JSON.stringify(data));
 }
 
+/**
+ * Sync from Supabase - Rebuilds everything from relational tables.
+ */
+export async function syncFromSupabase() {
+  const storeId = getStoreId();
+  if (!storeId) return;
+
+  try {
+    const data = await sync.fetchAllData(storeId);
+    const prefix = getStorePrefix();
+
+    localStorage.setItem(`${prefix}products`, JSON.stringify(data.products));
+    localStorage.setItem(`${prefix}sales`, JSON.stringify(data.sales));
+    localStorage.setItem(`${prefix}expenses`, JSON.stringify(data.expenses));
+    localStorage.setItem(`${prefix}suppliers`, JSON.stringify(data.suppliers));
+
+    window.dispatchEvent(new Event("novaInventoryUpdated"));
+    window.dispatchEvent(new Event("novaStoreUpdated"));
+  } catch (e) {
+    console.error("Supabase sync failed", e);
+  }
+}
+
 export function getProducts(): Product[] {
-  const defaults = defaultProducts();
-  let stored = load<Product[]>("products", defaults);
-
-  // Ensure all products have a minStock, default to 5
-  let updated = false;
-  stored = stored.map(p => {
-    if (p.minStock === undefined) {
-      updated = true;
-      return { ...p, minStock: 5 };
-    }
-    return p;
-  });
-
-  const missingDefaults = defaults.filter(product => !stored.some(existing => existing.id === product.id));
-
-  if (missingDefaults.length > 0) {
-    stored = [...stored, ...missingDefaults];
-    updated = true;
-  }
-
-  if (updated) {
-    saveProducts(stored);
-  }
-
-  return stored;
+  return load<Product[]>("products", []);
 }
 
 export function saveProducts(products: Product[]) {
   save("products", products);
+  const storeId = getStoreId();
+  if (storeId) sync.pushProducts(storeId, products);
 }
 
 export function updateProductStock(id: string, delta: number) {
   const products = getProducts();
-  const index = products.findIndex(product => product.id === id);
+  const index = products.findIndex(p => p.id === id);
   if (index >= 0) {
     products[index].stock = Math.max(0, products[index].stock + delta);
-    saveProducts(products);
+    saveProducts(products); // also pushes to supabase
   }
 }
 
-export function getBons(): Bon[] {
-  return load<Bon[]>("bons", []);
+export function addSale(sale: Sale) {
+  const sales = getSales();
+  sales.unshift(sale);
+  save("sales", sales);
+
+  const storeId = getStoreId();
+  if (storeId) sync.pushSale(storeId, sale);
 }
 
-export function saveBons(bons: Bon[]) {
-  save("bons", bons);
+export function getSales(): Sale[] {
+  return load<Sale[]>("sales", []);
 }
 
 export function addBon(bon: Bon) {
   const bons = getBons();
   bons.unshift(bon);
-  saveBons(bons);
+  save("bons", bons);
 }
 
 export function updateBon(updated: Bon) {
@@ -239,32 +232,18 @@ export function updateBon(updated: Bon) {
   }
 }
 
-export function getSales(): Sale[] {
-  return load<Sale[]>("sales", []);
-}
-
-export function saveSales(sales: Sale[]) {
-  save("sales", sales);
-}
-
-export function addSale(sale: Sale) {
-  const sales = getSales();
-  sales.unshift(sale);
-  saveSales(sales);
-}
-
-export function getCredits(): Credit[] {
-  return load<Credit[]>("credits", []);
-}
-
-export function saveCredits(credits: Credit[]) {
-  save("credits", credits);
+export function getBons(): Bon[] {
+  return load<Bon[]>("bons", []);
 }
 
 export function addCredit(credit: Credit) {
   const credits = getCredits();
   credits.unshift(credit);
-  saveCredits(credits);
+  save("credits", credits);
+}
+
+export function getCredits(): Credit[] {
+  return load<Credit[]>("credits", []);
 }
 
 export function updateCredit(updated: Credit) {
@@ -272,14 +251,27 @@ export function updateCredit(updated: Credit) {
   const index = credits.findIndex(c => c.id === updated.id);
   if (index >= 0) {
     credits[index] = updated;
-    saveCredits(credits);
+    save("credits", credits);
   }
 }
 
 export function deleteCredit(id: string) {
   const credits = getCredits();
   const filtered = credits.filter(c => c.id !== id);
-  saveCredits(filtered);
+  save("credits", filtered);
+}
+
+export function addExpense(expense: Expense) {
+  const expenses = getExpenses();
+  expenses.unshift(expense);
+  save("expenses", expenses);
+
+  const storeId = getStoreId();
+  if (storeId) sync.pushExpense(storeId, expense);
+}
+
+export function getExpenses(): Expense[] {
+  return load<Expense[]>("expenses", []);
 }
 
 export function getCustomCards(): CustomSaleCard[] {
@@ -288,6 +280,18 @@ export function getCustomCards(): CustomSaleCard[] {
 
 export function saveCustomCards(cards: CustomSaleCard[]) {
   save("custom_cards", cards);
+}
+
+export function saveBons(bons: Bon[]) {
+  save("bons", bons);
+}
+
+export function saveSales(sales: Sale[]) {
+  save("sales", sales);
+}
+
+export function saveCredits(credits: Credit[]) {
+  save("credits", credits);
 }
 
 export function getSuppliers(): Supplier[] {
@@ -306,26 +310,8 @@ export function saveInvoices(invoices: Invoice[]) {
   save("invoices", invoices);
 }
 
-function defaultProducts(): Product[] {
-  return [
-    { id: "1", name: "Satiné Blanc 25kg", nameAr: "ساتيني أبيض", category: "satine", priceSale: 5500, priceBuy: 4200, stock: 30, unit: "unité" },
-    { id: "2", name: "Satiné Ivoire 25kg", nameAr: "ساتيني عاجي", category: "satine", priceSale: 5800, priceBuy: 4500, stock: 20, unit: "unité" },
-    { id: "3", name: "Enduit Fin 25kg", nameAr: "معجون ناعم", category: "enduit", priceSale: 3200, priceBuy: 2400, stock: 45, unit: "unité" },
-    { id: "4", name: "Enduit de Rebouchage", nameAr: "معجون ترميم", category: "enduit", priceSale: 2800, priceBuy: 2000, stock: 25, unit: "unité" },
-    { id: "5", name: "Vinyle Mat 10L", nameAr: "فينيل مطفي", category: "vinyle", priceSale: 4500, priceBuy: 3500, stock: 35, unit: "unité" },
-    { id: "6", name: "Vinyle Brillant 10L", nameAr: "فينيل لامع", category: "vinyle", priceSale: 4800, priceBuy: 3700, stock: 20, unit: "unité" },
-    { id: "13", name: "Laque Blanche 20kg", nameAr: "لاك أبيض", category: "laque", priceSale: 6200, priceBuy: 4900, stock: 18, unit: "unité" },
-    { id: "14", name: "Laque Satinée 20kg", nameAr: "لاك ساتيني", category: "laque", priceSale: 6800, priceBuy: 5400, stock: 14, unit: "unité" },
-    { id: "7", name: "Cadre Décoratif Or", nameAr: "إطار ذهبي", category: "decor", priceSale: 3500, priceBuy: 2200, stock: 15, unit: "unité" },
-    { id: "8", name: "Sticker Mural Floral", nameAr: "ملصق جداري", category: "decor", priceSale: 1800, priceBuy: 900, stock: 40, unit: "unité" },
-    { id: "9", name: "Fixateur Universel 5L", nameAr: "مثبت عالمي", category: "fixateur", priceSale: 3000, priceBuy: 2200, stock: 28, unit: "unité" },
-    { id: "10", name: "Fixateur Acrylique 1L", nameAr: "مثبت أكريليك", category: "fixateur", priceSale: 1200, priceBuy: 800, stock: 50, unit: "unité" },
-    { id: "11", name: "Rouleau Laine 25cm", nameAr: "رولو صوف", category: "accessoires", priceSale: 600, priceBuy: 350, stock: 60, unit: "unité" },
-    { id: "12", name: "Pinceau Plat 10cm", nameAr: "فرشاة مسطحة", category: "accessoires", priceSale: 400, priceBuy: 200, stock: 80, unit: "unité" },
-  ];
-}
-
 export function generateId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
