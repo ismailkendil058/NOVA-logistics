@@ -766,6 +766,18 @@ begin
       using (public.app_has_store_access(id));
   end if;
 
+  -- Allow anonymous/unauthenticated users to read active stores.
+  -- This is needed so the StoreSelector page can list stores before any auth exists.
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'stores' and policyname = 'stores_select_public'
+  ) then
+    create policy stores_select_public
+      on public.stores
+      for select
+      using (is_active = true);
+  end if;
+
   if not exists (
     select 1 from pg_policies
     where schemaname = 'public' and tablename = 'store_memberships' and policyname = 'store_memberships_select_own'
