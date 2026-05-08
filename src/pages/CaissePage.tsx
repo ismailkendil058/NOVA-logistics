@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
-  getProducts, CartItem, Product, CategoryType, getCategories,
+  getProducts, CartItem, Product, CategoryType, getCategories, getStoreSlug,
   formatDZD, generateId, addSale, addBon, updateProductStock, TeinteEntry,
   getCustomCards, saveCustomCards, CustomSaleCard, addCredit, getCredits, updateCredit,
   addExpense
@@ -39,7 +39,17 @@ const categoryColors: Record<CategoryType, string> = {
 };
 
 
-const customizableCategories = new Set<CategoryType>(["satine", "vinyle", "enduit", "laque", "fixateur"]);
+// For the Placo store, ALL categories support "vente personnalisée".
+// For the main store, only paint/liquid categories do.
+const getCustomizableCategories = (): Set<CategoryType> => {
+  const slug = getStoreSlug();
+  if (slug === "placo") {
+    // All placo categories are customizable
+    return new Set<CategoryType>(["placo", "vis", "platre", "electricite", "accessoires", "enduit"]);
+  }
+  return new Set<CategoryType>(["satine", "vinyle", "enduit", "laque", "fixateur"]);
+};
+const customizableCategories = getCustomizableCategories();
 
 type TempTeinteEntry = { unitPrice: string; kg: string };
 const createTempTeinteEntry = (): TempTeinteEntry => ({ unitPrice: "", kg: "" });
