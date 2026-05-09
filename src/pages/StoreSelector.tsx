@@ -35,19 +35,11 @@ export default function StoreSelector() {
                         slug: s.slug
                     })));
                 } else {
-                    // Fallback to defaults if DB is empty
-                    setStores([
-                        { id: "store-1", name: "Nova Deco - Magasin Principal", slug: "magasin-principal" },
-                        { id: "store-2", name: "Nova Deco - Placo", slug: "placo" },
-                    ]);
+                    setStores([]);
                 }
             } catch (error) {
                 console.error("Failed to fetch stores", error);
-                // Fallback for offline/no DB
-                setStores([
-                    { id: "store-1", name: "Nova Deco - Magasin Principal", slug: "magasin-principal" },
-                    { id: "store-2", name: "Nova Deco - Placo", slug: "placo" },
-                ]);
+                setStores([]);
             } finally {
                 setIsLoading(false);
             }

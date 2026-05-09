@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { syncFromSupabase } from './store';
 import { supabase } from './supabase';
 
 // MULTI-STORE: Definition of the Store entity
@@ -25,14 +24,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     useEffect(() => {
         const initStore = async () => {
+            // Only localStorage usage: persist which store is selected (not business data)
             const storedStore = localStorage.getItem('novadeco_selected_store');
             if (storedStore) {
                 try {
                     const store = JSON.parse(storedStore);
-                    setCurrentStoreState(store);
-                    await syncFromSupabase();
+                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+                    if (store && store.id && uuidRegex.test(store.id)) {
+                        setCurrentStoreState(store);
+                    } else {
+                        // Invalid store ID (likely a placeholder like 'store-1'), clear it
+                        localStorage.removeItem('novadeco_selected_store');
+                        setCurrentStoreState(null);
+                    }
                 } catch (e) {
                     console.error("Failed to parse store", e);
+                    localStorage.removeItem('novadeco_selected_store');
                 }
             }
             setIsLoading(false);
@@ -47,10 +54,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const channel = supabase
             .channel('db-changes')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'products', filter: `store_id=eq.${currentStore.id}` }, () => {
-                syncFromSupabase();
+                window.dispatchEvent(new Event("novaInventoryUpdated"));
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'sales', filter: `store_id=eq.${currentStore.id}` }, () => {
-                syncFromSupabase();
+                window.dispatchEvent(new Event("novaInventoryUpdated"));
             })
             .subscribe();
 
@@ -64,7 +71,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setCurrentStoreState(store);
         if (store) {
             localStorage.setItem('novadeco_selected_store', JSON.stringify(store));
-            await syncFromSupabase();
             window.dispatchEvent(new Event("novaStoreUpdated"));
         } else {
             localStorage.removeItem('novadeco_selected_store');

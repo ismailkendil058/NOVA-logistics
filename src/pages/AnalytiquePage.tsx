@@ -1,10 +1,15 @@
-import { useMemo, useState } from "react";
-import { getSales, formatDZD, getExpenses } from "@/lib/store";
+import { useEffect, useMemo, useState } from "react";
+import { getSales, formatDZD, getExpenses, Sale, Expense } from "@/lib/store";
 import { Input } from "@/components/ui/input";
 
 export default function AnalytiquePage() {
-  const [sales] = useState(getSales);
-  const [expenses] = useState(getExpenses);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+
+  useEffect(() => {
+    getSales().then(setSales);
+    getExpenses().then(setExpenses);
+  }, []);
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [day, setDay] = useState<string>("");
   const [mobileView, setMobileView] = useState<"kpis" | "history">("kpis");
@@ -37,10 +42,19 @@ export default function AnalytiquePage() {
     return unitCost * item.quantity;
   };
 
-  const totalRevenue = monthlySales.reduce((s, sale) => s + sale.total, 0);
-  const totalTeinte = monthlySales.reduce((s, sale) => s + sale.teinteAmount, 0);
+  const totalRevenue = monthlySales.reduce((s, sale) => {
+    // Force negative revenue for retours just in case
+    const rev = sale.type === 'retour' ? -Math.abs(sale.total) : sale.total;
+    return s + rev;
+  }, 0);
+  const totalTeinte = monthlySales.reduce((s, sale) => {
+    const t = sale.type === 'retour' ? -Math.abs(sale.teinteAmount) : sale.teinteAmount;
+    return s + t;
+  }, 0);
   const totalCost = monthlySales.reduce((s, sale) => {
-    return s + sale.items.reduce((is, item) => is + getItemPurchaseCost(item), 0);
+    const saleCost = sale.items.reduce((is, item) => is + getItemPurchaseCost(item), 0);
+    // Force cost to be subtracted for returns
+    return s + (sale.type === 'retour' ? -Math.abs(saleCost) : Math.abs(saleCost));
   }, 0);
   const totalExpenses = monthlyExpenses.reduce((s, e) => s + e.amount, 0);
   const profit = totalRevenue - totalCost - totalExpenses;
@@ -83,15 +97,24 @@ export default function AnalytiquePage() {
         sales: [],
       };
 
-      existing.revenue += sale.total;
-      existing.teinte += sale.teinteAmount;
+      const rev = sale.type === 'retour' ? -Math.abs(sale.total) : sale.total;
+      existing.revenue += rev;
+
+      const t = sale.type === 'retour' ? -Math.abs(sale.teinteAmount) : sale.teinteAmount;
+      existing.teinte += t;
+
       const entryCount = sale.teinteEntries?.length ?? (sale.teinteAmount > 0 ? 1 : 0);
       existing.teinteEntriesCount += entryCount;
-      existing.cost += sale.items.reduce((s, i) => s + getItemPurchaseCost(i), 0);
+
+      const saleCost = sale.items.reduce((s, i) => s + getItemPurchaseCost(i), 0);
+      existing.cost += (sale.type === 'retour' ? -Math.abs(saleCost) : Math.abs(saleCost));
+
       if (sale.type === "bon") {
         existing.bonCount += 1;
-      } else {
+      } else if (sale.type === "direct") {
         existing.directCount += 1;
+      } else if (sale.type === "retour") {
+        // Optionnel: tracking des retours par jour
       }
 
       sale.items.forEach(item => existing.productNames.add(item.product.name));
@@ -167,7 +190,6 @@ export default function AnalytiquePage() {
         <div className="grid grid-cols-1 gap-4 mb-8 sm:grid-cols-2 lg:grid-cols-4">
           {[
             { label: "Chiffre d'affaires", value: formatDZD(totalRevenue), color: "text-[#3f5362]" },
-            { label: "Coût d'achat", value: formatDZD(totalCost), color: "text-red-500" },
             { label: "Dépenses", value: formatDZD(totalExpenses), color: "text-orange-500" },
             { label: "Bénéfice Net", value: formatDZD(profit), color: "text-[#41b86d]" },
             { label: "La Teinte", value: formatDZD(totalTeinte), color: "text-[#628b9a]" },
@@ -206,12 +228,17 @@ export default function AnalytiquePage() {
                     <tr key={sale.id} className="border-t border-gray-50 hover:bg-[#f0fbf4]/40 transition-colors">
                       <td className="px-6 py-4 text-gray-500 font-medium">{new Date(sale.date).toLocaleDateString('fr-FR')}</td>
                       <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider inline-flex justify-center items-center ${sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' : 'bg-[#41b86d]/10 text-[#41b86d]'}`}>
-                          {sale.type === 'bon' ? 'BON' : 'Directe'}
+                        <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider inline-flex justify-center items-center ${sale.type === 'retour' ? 'bg-red-50 text-red-500 border border-red-100' :
+                            sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' :
+                              'bg-[#41b86d]/10 text-[#41b86d]'
+                          }`}>
+                          {sale.type === 'retour' ? 'RETOUR' : sale.type === 'bon' ? 'BON' : 'Directe'}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-gray-600 font-bold">{sale.items.map(i => i.product.name).join(', ')}</td>
-                      <td className="px-6 py-4 text-center font-black text-[#41b86d]">{formatDZD(sale.total)}</td>
+                      <td className={`px-6 py-4 text-center font-black ${sale.type === 'retour' ? 'text-red-500' : 'text-[#41b86d]'}`}>
+                        {formatDZD(sale.total)}
+                      </td>
                     </tr>
                   ))
                 ) : (
@@ -263,8 +290,11 @@ export default function AnalytiquePage() {
                         <tr key={sale.id} className="bg-[#f8fdf8] border-t border-gray-100">
                           <td className="px-12 py-3 text-[11px] text-gray-500">{new Date(sale.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
                           <td className="px-6 py-3">
-                            <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider inline-flex justify-center items-center ${sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' : 'bg-[#41b86d]/10 text-[#41b86d]'}`}>
-                              {sale.type === 'bon' ? 'BON' : 'Directe'}
+                            <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider inline-flex justify-center items-center ${sale.type === 'retour' ? 'bg-red-50 text-red-500 border border-red-100' :
+                                sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' :
+                                  'bg-[#41b86d]/10 text-[#41b86d]'
+                              }`}>
+                              {sale.type === 'retour' ? 'RETOUR' : sale.type === 'bon' ? 'BON' : 'Directe'}
                             </span>
                           </td>
                           <td className="px-6 py-3 text-gray-600 font-bold">
@@ -283,7 +313,9 @@ export default function AnalytiquePage() {
                               <div className="mt-1 text-[11px] text-[#41b86d]">La Teinte +{formatDZD(sale.teinteAmount)}</div>
                             ) : null}
                           </td>
-                          <td className="px-6 py-3 text-right font-black text-[#41b86d]">{formatDZD(sale.total)}</td>
+                          <td className={`px-6 py-3 text-right font-black ${sale.type === 'retour' ? 'text-red-500' : 'text-[#41b86d]'}`}>
+                            {formatDZD(sale.total)}
+                          </td>
                         </tr>
                       ))
                       : [];
@@ -306,8 +338,11 @@ export default function AnalytiquePage() {
                         <p className="text-sm font-bold text-gray-800">{new Date(sale.date).toLocaleDateString('fr-FR')}</p>
                         <p className="text-[11px] text-gray-500">{new Date(sale.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
-                      <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider ${sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' : 'bg-[#41b86d]/10 text-[#41b86d]'}`}>
-                        {sale.type === 'bon' ? 'BON' : 'Directe'}
+                      <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider ${sale.type === 'retour' ? 'bg-red-50 text-red-500' :
+                          sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' :
+                            'bg-[#41b86d]/10 text-[#41b86d]'
+                        }`}>
+                        {sale.type === 'retour' ? 'RETOUR' : sale.type === 'bon' ? 'BON' : 'Directe'}
                       </span>
                     </div>
                     <p className="mt-3 text-sm text-gray-600 font-semibold">{sale.items.map(i => i.product.name).join(', ')}</p>
@@ -326,7 +361,9 @@ export default function AnalytiquePage() {
                     )}
                     <div className="flex items-center justify-between mt-4">
                       <span className="text-[11px] text-gray-400 uppercase tracking-widest">Total</span>
-                      <span className="text-lg font-black text-[#41b86d]">{formatDZD(sale.total)}</span>
+                      <span className={`text-lg font-black ${sale.type === 'retour' ? 'text-red-500' : 'text-[#41b86d]'}`}>
+                        {formatDZD(sale.total)}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -379,8 +416,11 @@ export default function AnalytiquePage() {
                             <div key={sale.id} className="rounded-xl border border-gray-100 bg-[#f8fdf8] p-3">
                               <div className="flex items-center justify-between">
                                 <span className="text-[11px] text-gray-500">{new Date(sale.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
-                                <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' : 'bg-[#41b86d]/10 text-[#41b86d]'}`}>
-                                  {sale.type === 'bon' ? 'BON' : 'Directe'}
+                                <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${sale.type === 'retour' ? 'bg-red-50 text-red-500' :
+                                    sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' :
+                                      'bg-[#41b86d]/10 text-[#41b86d]'
+                                  }`}>
+                                  {sale.type === 'retour' ? 'RETOUR' : sale.type === 'bon' ? 'BON' : 'Directe'}
                                 </span>
                               </div>
                               <p className="mt-2 text-sm text-gray-600">{sale.items.map(i => i.product.name).join(', ')}</p>
@@ -399,7 +439,9 @@ export default function AnalytiquePage() {
                               )}
                               <div className="mt-3 flex items-center justify-between text-lg font-black text-[#41b86d]">
                                 <span>Total</span>
-                                <span>{formatDZD(sale.total)}</span>
+                                <span className={`text-lg font-black ${sale.type === 'retour' ? 'text-red-500' : 'text-[#41b86d]'}`}>
+                                  {formatDZD(sale.total)}
+                                </span>
                               </div>
                             </div>
                           ))}

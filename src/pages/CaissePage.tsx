@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   getProducts, CartItem, Product, CategoryType, getCategories, getStoreSlug,
-  formatDZD, generateId, addSale, addBon, updateProductStock, TeinteEntry,
-  getCustomCards, saveCustomCards, CustomSaleCard, addCredit, getCredits, updateCredit,
+  formatDZD, generateId, addSale, updateProductStock, TeinteEntry,
+  getCustomCards, saveCustomCards, CustomSaleCard, getCredits, Credit,
   addExpense
 } from "@/lib/store";
 
@@ -55,7 +55,8 @@ type TempTeinteEntry = { unitPrice: string; kg: string };
 const createTempTeinteEntry = (): TempTeinteEntry => ({ unitPrice: "", kg: "" });
 
 export default function CaissePage() {
-  const [products, setProducts] = useState(getProducts());
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<CategoryType | null>("satine");
@@ -76,9 +77,9 @@ export default function CaissePage() {
     const kg = Number(entry.kg) || 0;
     return sum + unitPrice * kg;
   }, 0);
-  const [customCards, setCustomCards] = useState<CustomSaleCard[]>(() => getCustomCards());
+  const [customCards, setCustomCards] = useState<CustomSaleCard[]>([]);
   const [showCustomModal, setShowCustomModal] = useState(false);
-  const [allCredits, setAllCredits] = useState(() => getCredits());
+  const [allCredits, setAllCredits] = useState<Credit[]>([]);
   const uniqueClients = useMemo(() => {
     const clients: Record<string, { name: string; phone: string }> = {};
     allCredits.forEach(c => {
@@ -138,13 +139,35 @@ export default function CaissePage() {
     if (!retourSearch) return [];
     return products.filter(p => p.name.toLowerCase().includes(retourSearch.toLowerCase()));
   }, [products, retourSearch]);
+  const [customCardsLoaded, setCustomCardsLoaded] = useState(false);
   useEffect(() => {
-    saveCustomCards(customCards);
-  }, [customCards]);
+    if (customCardsLoaded) {
+      saveCustomCards(customCards);
+    }
+  }, [customCards, customCardsLoaded]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      const [prods, cards, creds] = await Promise.all([
+        getProducts(),
+        getCustomCards(),
+        getCredits(),
+      ]);
+      setProducts(prods);
+      setCustomCards(cards);
+      setAllCredits(creds);
+      setCustomCardsLoaded(true);
+      setLoading(false);
+    };
+    loadData();
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const handleInventoryUpdated = () => setProducts(getProducts());
+    const handleInventoryUpdated = () => {
+      getProducts().then(setProducts);
+    };
     window.addEventListener("novaInventoryUpdated", handleInventoryUpdated);
     return () => window.removeEventListener("novaInventoryUpdated", handleInventoryUpdated);
   }, []);
@@ -320,56 +343,21 @@ export default function CaissePage() {
     });
   };
 
-  const handleCheckout = (type: 'direct' | 'bon' | 'credit') => {
+  const handleCheckout = async (type: 'direct' | 'bon' | 'credit') => {
     const saleId = generateId();
-    cart.forEach(item => {
-      const productId = item.customBaseProductId ?? item.product.id;
-      updateProductStock(productId, -item.quantity);
-    });
+    // 2. Physical inventory update is now handled by DB trigger on sale_items insert
     applyCustomCardUsage();
 
     if (type === 'direct') {
-      addSale({ id: saleId, type: 'direct', items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
+      await addSale({ id: saleId, type: 'direct', items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
     } else if (type === 'bon') {
       const bonId = generateId();
       const bonNumber = `BON-${Date.now().toString().slice(-6)}`;
-      addBon({ id: bonId, number: bonNumber, clientName, clientPhone, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
-      addSale({ id: saleId, type: 'bon', bonId, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
+      const saleObj: any = { id: saleId, type: 'bon', bonId, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString(), clientName, clientPhone, number: bonNumber };
+      await addSale(saleObj);
     } else {
-      const existingCredits = getCredits();
-      const existingCredit = existingCredits.find(c => c.clientPhone === clientPhone);
-      const initialPaid = Number(paidAmount) || 0;
-      const saleId = generateId();
-
-      if (existingCredit) {
-        const updated = {
-          ...existingCredit,
-          items: [...(existingCredit.items || []), ...cart],
-          total: existingCredit.total + total,
-          teinteAmount: (existingCredit.teinteAmount || 0) + teinteAmount,
-          reduction: (existingCredit.reduction || 0) + reduction,
-          versements: initialPaid > 0
-            ? [...(existingCredit.versements || []), { id: generateId(), amount: initialPaid, date: new Date().toISOString() }]
-            : (existingCredit.versements || [])
-        };
-        updateCredit(updated);
-        addSale({ id: saleId, type: 'credit', creditId: existingCredit.id, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
-      } else {
-        const creditId = generateId();
-        addCredit({
-          id: creditId,
-          clientName,
-          clientPhone,
-          items: [...cart],
-          teinteAmount,
-          teinteEntries,
-          reduction,
-          total,
-          versements: initialPaid > 0 ? [{ id: generateId(), amount: initialPaid, date: new Date().toISOString() }] : [],
-          date: new Date().toISOString()
-        });
-        addSale({ id: saleId, type: 'credit', creditId, items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
-      }
+      const saleObj: any = { id: saleId, type: 'credit', items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString(), clientName, clientPhone };
+      await addSale(saleObj);
     }
 
     setCart([]);
@@ -379,20 +367,21 @@ export default function CaissePage() {
     setClientName("");
     setClientPhone("");
     setPaidAmount("");
-    setAllCredits(getCredits());
-    setProducts(getProducts());
+    const [newCredits, newProducts] = await Promise.all([getCredits(), getProducts()]);
+    setAllCredits(newCredits);
+    setProducts(newProducts);
     setShowCheckout(false);
     setCheckoutMode("choice");
   };
 
-  const handleRetour = () => {
+  const handleRetour = async () => {
     if (!selectedRetourProduct || !retourQty || !retourPrice) return;
     const qty = Number(retourQty);
     const price = Number(retourPrice);
     const totalRetour = qty * price;
 
-    updateProductStock(selectedRetourProduct.id, qty);
-    addSale({
+    // Stock update handled by DB trigger on addSale(type: 'retour')
+    await addSale({
       id: generateId(),
       type: "retour",
       items: [{
@@ -412,15 +401,16 @@ export default function CaissePage() {
     setRetourQty("");
     setRetourPrice("");
     setRetourSearch("");
-    setProducts(getProducts());
+    const newProducts = await getProducts();
+    setProducts(newProducts);
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("novaInventoryUpdated"));
     }
   };
 
-  const handleExpense = () => {
+  const handleExpense = async () => {
     if (!expenseReason || !expenseAmount) return;
-    addExpense({
+    await addExpense({
       id: generateId(),
       reason: expenseReason,
       amount: Number(expenseAmount),

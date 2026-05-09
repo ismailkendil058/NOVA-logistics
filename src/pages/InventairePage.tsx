@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Search, Pencil, Trash2, AlertTriangle, TrendingUp, Wallet, Package } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,10 +17,14 @@ const formatPrice = (amount: number) => {
 };
 
 export default function InventairePage() {
-  const [products, setProducts] = useState(getProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState("");
   const isMobile = useIsMobile();
+
+  useEffect(() => {
+    getProducts().then(setProducts);
+  }, []);
 
   // Edit State
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -42,25 +46,25 @@ export default function InventairePage() {
     }), { buy: 0, sale: 0 });
   }, [products]);
 
-  const updateMinStock = (id: string, value: number) => {
+  const updateMinStock = async (id: string, value: number) => {
     const updated = products.map(p => p.id === id ? { ...p, minStock: value } : p);
     setProducts(updated);
-    saveProducts(updated);
+    await saveProducts(updated);
   };
 
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
     if (!editingProduct) return;
     const updated = products.map(p => p.id === editingProduct.id ? editingProduct : p);
     setProducts(updated);
-    saveProducts(updated);
+    await saveProducts(updated);
     setEditingProduct(null);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!productToDelete) return;
     const updated = products.filter(p => p.id !== productToDelete.id);
     setProducts(updated);
-    saveProducts(updated);
+    await saveProducts(updated);
     setProductToDelete(null);
     setEditingProduct(null);
   };

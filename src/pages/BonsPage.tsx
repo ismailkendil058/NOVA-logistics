@@ -1,14 +1,14 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Search, Eye, Edit3, Trash2, Printer } from "lucide-react";
 import { BonA4 } from "@/components/BonA4";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { getBons, Bon, formatDZD, updateBon, CartItem, getProducts, updateProductStock } from "@/lib/store";
+import { getBons, Bon, formatDZD, updateBon, CartItem, getProducts, updateProductStock, deleteBon, Product } from "@/lib/store";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
 export default function BonsPage() {
-  const [bons, setBons] = useState(getBons);
+  const [bons, setBons] = useState<Bon[]>([]);
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [selectedBon, setSelectedBon] = useState<Bon | null>(null);
@@ -19,9 +19,26 @@ export default function BonsPage() {
   const [newProductId, setNewProductId] = useState("");
   const [newProductQty, setNewProductQty] = useState("");
   const [editReduction, setEditReduction] = useState("");
-  const products = getProducts();
+  const [products, setProducts] = useState<Product[]>([]);
   const isMobile = useIsMobile();
   const [bonToPrint, setBonToPrint] = useState<Bon | null>(null);
+  const [bonToDelete, setBonToDelete] = useState<Bon | null>(null);
+
+  useEffect(() => {
+    getBons().then(setBons);
+    getProducts().then(setProducts);
+  }, []);
+
+  const handleDeleteBon = async (id: string) => {
+    await deleteBon(id);
+    const updatedBons = await getBons();
+    setBons(updatedBons);
+    setBonToDelete(null);
+    setEditingBon(null);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("novaInventoryUpdated"));
+    }
+  };
 
   const handlePrint = (bon: Bon) => {
     setBonToPrint(bon);
@@ -59,26 +76,9 @@ export default function BonsPage() {
 
   const getInventoryProductId = (item: CartItem) => item.customBaseProductId ?? item.product.id;
 
-  const applyInventoryAdjustments = (original: CartItem[], updated: CartItem[]) => {
-    const deltaMap = new Map<string, number>();
-    original.forEach(item => {
-      const id = getInventoryProductId(item);
-      deltaMap.set(id, (deltaMap.get(id) ?? 0) + item.quantity);
-    });
-    updated.forEach(item => {
-      const id = getInventoryProductId(item);
-      deltaMap.set(id, (deltaMap.get(id) ?? 0) - item.quantity);
-    });
-    deltaMap.forEach((delta, productId) => {
-      if (delta !== 0) {
-        updateProductStock(productId, delta);
-      }
-    });
-  };
-
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
     if (!editingBon) return;
-    applyInventoryAdjustments(editingBon.items, editingItems);
+    // Stock adjustments are handled automatically by DB triggers when sale_items are replaced in updateBon()
     const subtotal = editingItems.reduce((sum, item) => sum + item.subtotal, 0);
     const reductionValue = Number(editReduction) || 0;
     const updated: Bon = {
@@ -89,8 +89,9 @@ export default function BonsPage() {
       reduction: reductionValue,
       total: subtotal + editingBon.teinteAmount - reductionValue,
     };
-    updateBon(updated);
-    setBons(prev => prev.map(b => (b.id === updated.id ? updated : b)));
+    await updateBon(updated);
+    const refreshedBons = await getBons();
+    setBons(refreshedBons);
     if (typeof window !== "undefined") {
       window.dispatchEvent(new Event("novaInventoryUpdated"));
     }
@@ -228,15 +229,26 @@ export default function BonsPage() {
                   </div>
                   <div className="text-right flex items-center gap-3">
                     <p className="text-sm font-black text-[#41b86d]">{formatDZD(bon.total)}</p>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePrint(bon);
-                      }}
-                      className="p-2 text-gray-300 hover:text-[#41b86d]"
-                    >
-                      <Printer className="h-4 w-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePrint(bon);
+                        }}
+                        className="p-2 text-gray-300 hover:text-[#41b86d]"
+                      >
+                        <Printer className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setBonToDelete(bon);
+                        }}
+                        className="p-2 text-gray-300 hover:text-red-500"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
@@ -419,13 +431,23 @@ export default function BonsPage() {
                     <span>{formatDZD(editingTotal)}</span>
                   </div>
                 </div>
-                <Button
-                  disabled={!canSaveEdit}
-                  onClick={handleEditSave}
-                  className="mt-1 h-11 w-full bg-[#41b86d] font-bold text-white hover:bg-[#378f63]"
-                >
-                  Enregistrer les modifications
-                </Button>
+                <div className="grid grid-cols-2 gap-2 mt-1">
+                  <Button
+                    variant="outline"
+                    onClick={() => setBonToDelete(editingBon)}
+                    className="h-11 w-full text-red-500 border-red-200 hover:bg-red-50 font-bold rounded-2xl"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Supprimer
+                  </Button>
+                  <Button
+                    disabled={!canSaveEdit}
+                    onClick={handleEditSave}
+                    className="h-11 w-full bg-[#41b86d] font-bold text-white hover:bg-[#378f63] rounded-2xl"
+                  >
+                    Enregistrer
+                  </Button>
+                </div>
               </div>
             )}
           </DialogContent>
@@ -480,6 +502,9 @@ export default function BonsPage() {
                     </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-300 hover:text-[#41b86d] hover:bg-[#41b86d]/10 transition-colors" onClick={() => handlePrint(bon)}>
                       <Printer className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors" onClick={() => setBonToDelete(bon)}>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </td>
                 </tr>
@@ -677,18 +702,63 @@ export default function BonsPage() {
                   <span>{formatDZD(editingTotal)}</span>
                 </div>
               </div>
-              <Button
-                disabled={!canSaveEdit}
-                onClick={handleEditSave}
-                className="w-full h-11 mt-1 bg-[#41b86d] hover:bg-[#378f63] text-white font-bold"
-              >
-                Enregistrer les modifications
-              </Button>
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setBonToDelete(editingBon)}
+                  className="w-full h-11 border-red-100 text-red-500 hover:bg-red-50 font-bold"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Supprimer
+                </Button>
+                <Button
+                  disabled={!canSaveEdit}
+                  onClick={handleEditSave}
+                  className="w-full h-11 bg-[#41b86d] hover:bg-[#378f63] text-white font-bold"
+                >
+                  Enregistrer
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
       {bonToPrint && <BonA4 bon={bonToPrint} />}
+
+      <Dialog open={!!bonToDelete} onOpenChange={() => setBonToDelete(null)}>
+        <DialogContent className="sm:max-w-md bg-white border-0 shadow-xl rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Supprimer le bon ?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-gray-600 font-medium">
+              Êtes-vous sûr de vouloir supprimer le bon <span className="font-bold text-gray-900">{bonToDelete?.number}</span> pour <span className="font-bold text-gray-900">{bonToDelete?.clientName}</span> ?
+            </p>
+            <p className="mt-2 text-sm text-gray-400">
+              Cette action remettra les articles en stock et annulera la vente dans l'analytique.
+            </p>
+          </div>
+          <div className="flex gap-3 mt-2">
+            <Button
+              variant="outline"
+              className="flex-1 h-12 rounded-xl font-bold border-gray-200"
+              onClick={() => setBonToDelete(null)}
+            >
+              Annuler
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1 h-12 rounded-xl font-bold bg-red-500 hover:bg-red-600 shadow-md shadow-red-100"
+              onClick={() => bonToDelete && handleDeleteBon(bonToDelete.id)}
+            >
+              Supprimer définitivement
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

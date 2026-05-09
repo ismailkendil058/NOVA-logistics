@@ -1,13 +1,14 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Plus, RotateCcw, Search, Eye, ArrowLeft, Package, PackagePlus, X, Pencil, Wallet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  getInvoices, saveInvoices, getSuppliers, saveSuppliers, getProducts, saveProducts,
+  getInvoices, getSuppliers, getProducts,
   Invoice, InvoiceItem, Supplier, Product,
-  formatDZD, generateId, updateProductStock
+  formatDZD, generateId, updateProductStock, upsertSupplier, upsertProduct,
+  createInvoice, updateInvoice, addInvoicePayment
 } from "@/lib/store";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
@@ -33,9 +34,17 @@ const createInvoiceFormItem = (): InvoiceFormItem => ({
 });
 
 export default function FacturesPage() {
-  const [invoices, setInvoices] = useState(getInvoices);
-  const [suppliers, setSuppliers] = useState(getSuppliers);
-  const [products, setProducts] = useState(getProducts);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    Promise.all([getInvoices(), getSuppliers(), getProducts()]).then(([inv, sup, prod]) => {
+      setInvoices(inv);
+      setSuppliers(sup);
+      setProducts(prod);
+    });
+  }, []);
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [view, setView] = useState<View>("list");
@@ -107,48 +116,25 @@ export default function FacturesPage() {
     return item.newName || "Produit";
   };
 
-  const handleSubmitInvoice = () => {
-    const existingSupplier = suppliers.find(s => s.name.toLowerCase() === newSupplier.name.trim().toLowerCase());
-    let supplier: Supplier;
-
-    if (existingSupplier) {
-      supplier = existingSupplier;
-    } else {
-      supplier = { id: generateId(), ...newSupplier, name: newSupplier.name.trim() };
-      const updatedS = [...suppliers, supplier];
-      saveSuppliers(updatedS);
-      setSuppliers(updatedS);
-    }
+  const handleSubmitInvoice = async () => {
+    // Get or create supplier
+    const supplier = await upsertSupplier(newSupplier);
+    const freshSuppliers = await getSuppliers();
+    setSuppliers(freshSuppliers);
 
     const items: InvoiceItem[] = [];
-    const updatedProducts = [...products];
 
     for (const item of invoiceItems) {
-      let product: Product;
-      const existingProduct = products.find(p => p.name.toLowerCase() === item.newName.trim().toLowerCase());
-
-      if (existingProduct) {
-        const idx = updatedProducts.findIndex(p => p.id === existingProduct.id);
-        updatedProducts[idx] = {
-          ...updatedProducts[idx],
-          stock: updatedProducts[idx].stock + item.quantity,
-          priceBuy: item.priceBuy,
-          priceSale: item.priceSale,
-          expiryDate: item.expiryDate || updatedProducts[idx].expiryDate,
-        };
-        product = updatedProducts[idx];
-      } else {
-        product = {
-          id: generateId(), name: item.newName.trim(), nameAr: "", category: item.newCategory as any,
-          priceSale: item.priceSale, priceBuy: item.priceBuy, stock: item.quantity, unit: "unité", expiryDate: item.expiryDate || undefined
-        };
-        updatedProducts.push(product);
-      }
+      const product = await upsertProduct({
+        name: item.newName,
+        category: item.newCategory,
+        priceBuy: item.priceBuy,
+        priceSale: item.priceSale,
+        quantity: item.quantity,
+        expiryDate: item.expiryDate || undefined,
+      });
       items.push({ product, quantity: item.quantity, priceBuy: item.priceBuy, priceSale: item.priceSale, expiryDate: item.expiryDate });
     }
-
-    saveProducts(updatedProducts);
-    setProducts(updatedProducts);
 
     const total = items.reduce((s, i) => s + i.priceBuy * i.quantity, 0);
     const paid = Number(initialPaid) || 0;
@@ -165,71 +151,38 @@ export default function FacturesPage() {
       type: "achat",
     };
 
-    const updated = [invoice, ...invoices];
-    saveInvoices(updated);
-    setInvoices(updated);
+    await createInvoice(invoice, supplier.id);
+    const [freshInvoices, freshProducts] = await Promise.all([getInvoices(), getProducts()]);
+    setInvoices(freshInvoices);
+    setProducts(freshProducts);
     resetAddForm();
     setView("list");
   };
 
-  const handleUpdateInvoice = () => {
+  const handleUpdateInvoice = async () => {
     if (!editingInvoiceId) return;
     const oldInvoice = invoices.find(i => i.id === editingInvoiceId);
     if (!oldInvoice) return;
 
-    const existingSupplier = suppliers.find(s => s.name.toLowerCase() === newSupplier.name.trim().toLowerCase());
-    let supplier: Supplier;
+    const supplier = await upsertSupplier(newSupplier);
+    const freshSuppliers = await getSuppliers();
+    setSuppliers(freshSuppliers);
 
-    if (existingSupplier) {
-      supplier = existingSupplier;
-    } else {
-      supplier = { id: generateId(), ...newSupplier, name: newSupplier.name.trim() };
-      const updatedS = [...suppliers, supplier];
-      saveSuppliers(updatedS);
-      setSuppliers(updatedS);
-    }
+    // Stock revert/apply is now handled automatically by Supabase triggers 
+    // when we update the invoice items.
 
-    const updatedProducts = [...products];
-
-    // 1. Revert old invoice stock changes
-    for (const oldItem of oldInvoice.items) {
-      const pIdx = updatedProducts.findIndex(p => p.id === oldItem.product.id);
-      if (pIdx >= 0) {
-        updatedProducts[pIdx] = {
-          ...updatedProducts[pIdx],
-          stock: updatedProducts[pIdx].stock - oldItem.quantity
-        };
-      }
-    }
-
-    // 2. Apply new invoice stock changes and update items
     const newItems: InvoiceItem[] = [];
     for (const item of invoiceItems) {
-      let product: Product;
-      const existingProduct = updatedProducts.find(p => p.name.toLowerCase() === item.newName.trim().toLowerCase());
-
-      if (existingProduct) {
-        const pIdx = updatedProducts.findIndex(p => p.id === existingProduct.id);
-        updatedProducts[pIdx] = {
-          ...updatedProducts[pIdx],
-          stock: updatedProducts[pIdx].stock + item.quantity,
-          priceBuy: item.priceBuy,
-          priceSale: item.priceSale,
-          expiryDate: item.expiryDate || updatedProducts[pIdx].expiryDate,
-        };
-        product = updatedProducts[pIdx];
-      } else {
-        product = {
-          id: generateId(), name: item.newName.trim(), nameAr: "", category: item.newCategory as any,
-          priceSale: item.priceSale, priceBuy: item.priceBuy, stock: item.quantity, unit: "unité", expiryDate: item.expiryDate || undefined
-        };
-        updatedProducts.push(product);
-      }
+      const product = await upsertProduct({
+        name: item.newName,
+        category: item.newCategory,
+        priceBuy: item.priceBuy,
+        priceSale: item.priceSale,
+        quantity: item.quantity,
+        expiryDate: item.expiryDate || undefined,
+      });
       newItems.push({ product, quantity: item.quantity, priceBuy: item.priceBuy, priceSale: item.priceSale, expiryDate: item.expiryDate });
     }
-
-    saveProducts(updatedProducts);
-    setProducts(updatedProducts);
 
     const total = newItems.reduce((s, i) => s + i.priceBuy * i.quantity, 0);
     const paid = Number(initialPaid) || 0;
@@ -240,19 +193,16 @@ export default function FacturesPage() {
       items: newItems,
       total,
       paidAmount: paid,
-      // Preserve existing payments and update the first one if it exists
       payments: (oldInvoice.payments && oldInvoice.payments.length > 0)
         ? [{ ...oldInvoice.payments[0], amount: paid, date: invoiceDate }, ...oldInvoice.payments.slice(1)]
         : (paid > 0 ? [{ id: generateId(), amount: paid, date: invoiceDate }] : []),
       date: invoiceDate,
     };
 
-    setInvoices(prev => {
-      const updated = prev.map(inv => inv.id === editingInvoiceId ? updatedInvoice : inv);
-      saveInvoices(updated);
-      return updated;
-    });
-
+    await updateInvoice(updatedInvoice, supplier.id);
+    const [freshInvoices, freshProducts] = await Promise.all([getInvoices(), getProducts()]);
+    setInvoices(freshInvoices);
+    setProducts(freshProducts);
     resetAddForm();
     setEditingInvoiceId(null);
     setView("list");
@@ -276,7 +226,7 @@ export default function FacturesPage() {
     setView("edit");
   };
 
-  const handleReturn = () => {
+  const handleReturn = async () => {
     const original = invoices.find(i => i.id === returnInvoiceId);
     if (!original) return;
 
@@ -284,11 +234,11 @@ export default function FacturesPage() {
     for (const ri of returnItems) {
       const origItem = original.items[ri.idx];
       if (!origItem) continue;
-      updateProductStock(origItem.product.id, -ri.quantity);
+      // Stock update is handled by DB trigger on createInvoice(type: 'retour')
       returnedItems.push({ ...origItem, quantity: ri.quantity });
     }
 
-    const returnInvoice: Invoice = {
+    const returnInvoiceObj: Invoice = {
       id: generateId(),
       number: `RET-${Date.now().toString().slice(-6)}`,
       supplier: original.supplier,
@@ -300,31 +250,26 @@ export default function FacturesPage() {
       type: "retour",
     };
 
-    const updated = [returnInvoice, ...invoices];
-    saveInvoices(updated);
-    setInvoices(updated);
-    setProducts(getProducts());
+    await createInvoice(returnInvoiceObj, original.supplier.id);
+    const [freshInvoices, freshProducts] = await Promise.all([getInvoices(), getProducts()]);
+    setInvoices(freshInvoices);
+    setProducts(freshProducts);
     setReturnInvoiceId("");
     setReturnItems([]);
     setView("list");
   };
 
-  const handleAddPayment = () => {
+  const handleAddPayment = async () => {
     if (!invoiceForPayment || !paymentAmount) return;
     const amount = Number(paymentAmount);
-    const newPayment = { id: generateId(), amount, date: new Date().toISOString() };
-    const updatedInvoice: Invoice = {
-      ...invoiceForPayment,
-      paidAmount: (invoiceForPayment.paidAmount || 0) + amount,
-      payments: [...(invoiceForPayment.payments || []), newPayment]
-    };
-    const updatedInvoices = invoices.map(inv => (inv.id === updatedInvoice.id ? updatedInvoice : inv));
-    saveInvoices(updatedInvoices);
-    setInvoices(updatedInvoices);
+    await addInvoicePayment(invoiceForPayment.id, amount);
+    const freshInvoices = await getInvoices();
+    setInvoices(freshInvoices);
     setPaymentAmount("");
     setInvoiceForPayment(null);
-    if (selectedInvoice?.id === updatedInvoice.id) {
-      setSelectedInvoice(updatedInvoice);
+    if (selectedInvoice?.id === invoiceForPayment.id) {
+      const updatedInv = freshInvoices.find(i => i.id === invoiceForPayment.id);
+      setSelectedInvoice(updatedInv || null);
     }
   };
 
@@ -1047,11 +992,11 @@ export default function FacturesPage() {
             Annuler
           </Button>
           <Button
-            onClick={handleSubmitInvoice}
+            onClick={view === "edit" ? handleUpdateInvoice : handleSubmitInvoice}
             disabled={invoiceItems.length === 0}
             className="bg-[#41b86d] hover:bg-[#39a05f] text-white shadow-sm font-bold h-11 px-8 rounded-xl disabled:opacity-40"
           >
-            Valider la Facture
+            {view === "edit" ? "Sauvegarder les modifications" : "Valider la Facture"}
           </Button>
         </div>
       </div>

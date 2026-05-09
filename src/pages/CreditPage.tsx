@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { formatDZD, getCredits, Credit, updateCredit, generateId } from "@/lib/store";
+import { formatDZD, getCredits, Credit, addCreditPayment, generateId } from "@/lib/store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ export default function CreditPage() {
     const isMobile = useIsMobile();
 
     useEffect(() => {
-        setCredits(getCredits());
+        getCredits().then(setCredits);
     }, []);
 
     const getPaidAmount = (credit: Credit) => (credit.versements || []).reduce((sum, v) => sum + v.amount, 0);
@@ -41,7 +41,7 @@ export default function CreditPage() {
         setShowHistoryModal(true);
     };
 
-    const handlePay = () => {
+    const handlePay = async () => {
         if (!selectedCredit) return;
         const amount = Number(payAmount);
         if (!amount || amount <= 0) {
@@ -56,16 +56,9 @@ export default function CreditPage() {
             return;
         }
 
-        const updated: Credit = {
-            ...selectedCredit,
-            versements: [
-                ...(selectedCredit.versements || []),
-                { id: generateId(), amount, date: new Date().toISOString() }
-            ]
-        };
-
-        updateCredit(updated);
-        setCredits(getCredits());
+        await addCreditPayment(selectedCredit.id, amount);
+        const refreshed = await getCredits();
+        setCredits(refreshed);
         setShowPayModal(false);
         toast.success("Versement enregistré");
     };
