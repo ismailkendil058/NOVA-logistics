@@ -8,7 +8,7 @@ import {
   getInvoices, getSuppliers, getProducts,
   Invoice, InvoiceItem, Supplier, Product,
   formatDZD, generateId, updateProductStock, upsertSupplier, upsertProduct,
-  createInvoice, updateInvoice, addInvoicePayment
+  createInvoice, updateInvoice, addInvoicePayment, getCategories, CategoryType
 } from "@/lib/store";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
@@ -26,7 +26,7 @@ type InvoiceFormItem = {
 const createInvoiceFormItem = (): InvoiceFormItem => ({
   productId: "",
   newName: "",
-  newCategory: "satine",
+  newCategory: getCategories()[0]?.key || "satine",
   quantity: 1,
   priceBuy: 0,
   priceSale: 0,
@@ -423,13 +423,9 @@ export default function FacturesPage() {
                         <SelectValue placeholder="Catégorie..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="satine">Satiné</SelectItem>
-                        <SelectItem value="enduit">Enduit</SelectItem>
-                        <SelectItem value="vinyle">Vinyle</SelectItem>
-                        <SelectItem value="laque">Laque</SelectItem>
-                        <SelectItem value="decor">Décor</SelectItem>
-                        <SelectItem value="fixateur">Fixateur</SelectItem>
-                        <SelectItem value="accessoires">Accessoires</SelectItem>
+                        {getCategories().map(cat => (
+                          <SelectItem key={cat.key} value={cat.key}>{cat.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                     <div className="grid grid-cols-2 gap-3">
@@ -550,13 +546,9 @@ export default function FacturesPage() {
                             <SelectValue placeholder="Catégorie..." />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="satine">Satiné</SelectItem>
-                            <SelectItem value="enduit">Enduit</SelectItem>
-                            <SelectItem value="vinyle">Vinyle</SelectItem>
-                            <SelectItem value="laque">Laque</SelectItem>
-                            <SelectItem value="decor">Décor</SelectItem>
-                            <SelectItem value="fixateur">Fixateur</SelectItem>
-                            <SelectItem value="accessoires">Accessoires</SelectItem>
+                            {getCategories().map(cat => (
+                              <SelectItem key={cat.key} value={cat.key}>{cat.label}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <div className="grid grid-cols-2 gap-3">
@@ -789,13 +781,9 @@ export default function FacturesPage() {
                 <Select value={draftInvoiceItem.newCategory} onValueChange={value => updateDraftInvoiceItem("newCategory", value)}>
                   <SelectTrigger className="bg-white border-gray-200 h-11 rounded-lg focus-visible:ring-0 text-sm"><SelectValue placeholder="Catégorie..." /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="satine">Satiné</SelectItem>
-                    <SelectItem value="enduit">Enduit</SelectItem>
-                    <SelectItem value="vinyle">Vinyle</SelectItem>
-                    <SelectItem value="laque">Laque</SelectItem>
-                    <SelectItem value="decor">Décor</SelectItem>
-                    <SelectItem value="fixateur">Fixateur</SelectItem>
-                    <SelectItem value="accessoires">Accessoires</SelectItem>
+                    {getCategories().map(cat => (
+                      <SelectItem key={cat.key} value={cat.key}>{cat.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

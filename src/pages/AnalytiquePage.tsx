@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getSales, formatDZD, getExpenses, Sale, Expense } from "@/lib/store";
+import { getSales, formatDZD, getExpenses, Sale, Expense, getStoreSlug } from "@/lib/store";
 import { Input } from "@/components/ui/input";
 
 export default function AnalytiquePage() {
@@ -192,9 +192,9 @@ export default function AnalytiquePage() {
             { label: "Chiffre d'affaires", value: formatDZD(totalRevenue), color: "text-[#3f5362]" },
             { label: "Dépenses", value: formatDZD(totalExpenses), color: "text-orange-500" },
             { label: "Bénéfice Net", value: formatDZD(profit), color: "text-[#41b86d]" },
-            { label: "La Teinte", value: formatDZD(totalTeinte), color: "text-[#628b9a]" },
-          ].map((kpi, i) => (
-            <div key={i} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-center">
+            getStoreSlug() !== "placo" ? { label: "La Teinte", value: formatDZD(totalTeinte), color: "text-[#628b9a]" } : null,
+          ].filter((kpi): kpi is any => kpi !== null).map((kpi, i) => (
+            <div key={i} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex flex-col justify-center text-center">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">{kpi.label}</p>
               <p className={`text-2xl font-black ${kpi.color}`}>{kpi.value}</p>
             </div>
@@ -229,8 +229,8 @@ export default function AnalytiquePage() {
                       <td className="px-6 py-4 text-gray-500 font-medium">{new Date(sale.date).toLocaleDateString('fr-FR')}</td>
                       <td className="px-6 py-4">
                         <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider inline-flex justify-center items-center ${sale.type === 'retour' ? 'bg-red-50 text-red-500 border border-red-100' :
-                            sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' :
-                              'bg-[#41b86d]/10 text-[#41b86d]'
+                          sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' :
+                            'bg-[#41b86d]/10 text-[#41b86d]'
                           }`}>
                           {sale.type === 'retour' ? 'RETOUR' : sale.type === 'bon' ? 'BON' : 'Directe'}
                         </span>
@@ -291,8 +291,8 @@ export default function AnalytiquePage() {
                           <td className="px-12 py-3 text-[11px] text-gray-500">{new Date(sale.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</td>
                           <td className="px-6 py-3">
                             <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-wider inline-flex justify-center items-center ${sale.type === 'retour' ? 'bg-red-50 text-red-500 border border-red-100' :
-                                sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' :
-                                  'bg-[#41b86d]/10 text-[#41b86d]'
+                              sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' :
+                                'bg-[#41b86d]/10 text-[#41b86d]'
                               }`}>
                               {sale.type === 'retour' ? 'RETOUR' : sale.type === 'bon' ? 'BON' : 'Directe'}
                             </span>
@@ -339,8 +339,8 @@ export default function AnalytiquePage() {
                         <p className="text-[11px] text-gray-500">{new Date(sale.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
                       <span className={`px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider ${sale.type === 'retour' ? 'bg-red-50 text-red-500' :
-                          sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' :
-                            'bg-[#41b86d]/10 text-[#41b86d]'
+                        sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' :
+                          'bg-[#41b86d]/10 text-[#41b86d]'
                         }`}>
                         {sale.type === 'retour' ? 'RETOUR' : sale.type === 'bon' ? 'BON' : 'Directe'}
                       </span>
@@ -417,8 +417,8 @@ export default function AnalytiquePage() {
                               <div className="flex items-center justify-between">
                                 <span className="text-[11px] text-gray-500">{new Date(sale.date).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
                                 <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${sale.type === 'retour' ? 'bg-red-50 text-red-500' :
-                                    sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' :
-                                      'bg-[#41b86d]/10 text-[#41b86d]'
+                                  sale.type === 'bon' ? 'bg-[#628b9a]/10 text-[#628b9a]' :
+                                    'bg-[#41b86d]/10 text-[#41b86d]'
                                   }`}>
                                   {sale.type === 'retour' ? 'RETOUR' : sale.type === 'bon' ? 'BON' : 'Directe'}
                                 </span>

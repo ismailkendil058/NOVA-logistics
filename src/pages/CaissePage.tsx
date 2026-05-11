@@ -59,7 +59,7 @@ export default function CaissePage() {
   const [loading, setLoading] = useState(true);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
-  const [activeCategory, setActiveCategory] = useState<CategoryType | null>("satine");
+  const [activeCategory, setActiveCategory] = useState<CategoryType | null>(getCategories()[0]?.key || null);
   const [teinteEntries, setTeinteEntries] = useState<TeinteEntry[]>([]);
   const [reduction, setReduction] = useState(0);
   const [showCheckout, setShowCheckout] = useState(false);
@@ -657,39 +657,41 @@ export default function CaissePage() {
               <span className="font-semibold text-gray-700">{formatDZD(subtotal)}</span>
             </div>
 
-            <div className="flex justify-between items-center bg-gray-50/50 p-2 rounded -mx-2">
-              <button
-                onClick={() => {
-                  if (teinteEntries.length) {
-                    setTempTeinteEntries(teinteEntries.map(entry => ({
-                      unitPrice: entry.unitPrice.toString(),
-                      kg: entry.kg.toString(),
-                    })));
-                  } else {
-                    setTempTeinteEntries([createTempTeinteEntry()]);
-                  }
-                  setShowTeinte(true);
-                }}
-                className="flex items-center gap-2 text-[#628b9a] hover:underline text-sm font-semibold"
-              >
-                <Paintbrush className="h-4 w-4" />
-                La Teinte
-              </button>
-              <div className="text-right">
-                <span className="font-semibold text-gray-700">
-                  {teinteAmount > 0 ? `+${formatDZD(teinteAmount)}` : '—'}
-                </span>
-                {teinteEntries.length > 0 && (
-                  <div className="text-[10px] text-gray-400 space-y-1 mt-1">
-                    {teinteEntries.map((entry, index) => (
-                      <div key={index}>
-                        <span>{entry.kg} kg</span> × <span>{formatDZD(entry.unitPrice)}</span> / kg
-                      </div>
-                    ))}
-                  </div>
-                )}
+            {getStoreSlug() !== "placo" && (
+              <div className="flex justify-between items-center bg-gray-50/50 p-2 rounded -mx-2">
+                <button
+                  onClick={() => {
+                    if (teinteEntries.length) {
+                      setTempTeinteEntries(teinteEntries.map(entry => ({
+                        unitPrice: entry.unitPrice.toString(),
+                        kg: entry.kg.toString(),
+                      })));
+                    } else {
+                      setTempTeinteEntries([createTempTeinteEntry()]);
+                    }
+                    setShowTeinte(true);
+                  }}
+                  className="flex items-center gap-2 text-[#628b9a] hover:underline text-sm font-semibold"
+                >
+                  <Paintbrush className="h-4 w-4" />
+                  La Teinte
+                </button>
+                <div className="text-right">
+                  <span className="font-semibold text-gray-700">
+                    {teinteAmount > 0 ? `+${formatDZD(teinteAmount)}` : '—'}
+                  </span>
+                  {teinteEntries.length > 0 && (
+                    <div className="text-[10px] text-gray-400 space-y-1 mt-1">
+                      {teinteEntries.map((entry, index) => (
+                        <div key={index}>
+                          <span>{entry.kg} kg</span> × <span>{formatDZD(entry.unitPrice)}</span> / kg
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex justify-between items-center bg-gray-50/50 p-2 rounded -mx-2">
               <button onClick={() => { setTempReduction(reduction.toString()); setShowReduction(true); }} className="flex items-center gap-2 text-[#628b9a] hover:underline text-sm font-semibold">
