@@ -17,7 +17,7 @@ export interface Product {
 
 export type CategoryType =
   | "satine" | "enduit" | "vinyle" | "laque" | "decor" | "fixateur" | "accessoires"
-  | "placo" | "vis" | "platre" | "electricite";
+  | "placo" | "vis" | "platre" | "electricite" | "pvc" | "cornier" | "peinture" | "outillage";
 
 export interface CartItem {
   product: Product;
@@ -877,12 +877,14 @@ export const CATEGORIES_MAP: Record<string, { key: CategoryType; label: string; 
     { key: "accessoires", label: "Accessoires", labelAr: "إكسسوارات" },
   ],
   "placo": [
-    { key: "placo", label: "Placo", labelAr: "بلاكو" },
-    { key: "vis", label: "Les Vis", labelAr: "براغي" },
-    { key: "accessoires", label: "Les Accessoires", labelAr: "إكسسوارات" },
-    { key: "enduit", label: "Les Enduit", labelAr: "معجون" },
-    { key: "platre", label: "Platre", labelAr: "جبس" },
+    { key: "placo", label: "Placoplatre", labelAr: "بلاكو بلاتر" },
+    { key: "pvc", label: "PVC", labelAr: "بي في سي" },
+    { key: "cornier", label: "Cornière & M", labelAr: "زاوية و حرف M" },
+    { key: "peinture", label: "Peinture", labelAr: "طلاء" },
+    { key: "vis", label: "Vis & Chevilles", labelAr: "براغي و سدادات" },
     { key: "electricite", label: "Électricité", labelAr: "كهرباء" },
+    { key: "outillage", label: "Outillages", labelAr: "أدوات" },
+    { key: "accessoires", label: "Accessoires", labelAr: "إكسسوارات" },
   ]
 };
 

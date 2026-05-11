@@ -22,6 +22,10 @@ const categoryIcons: Record<CategoryType, React.ElementType> = {
   vis: Hammer,
   platre: BoxSelect,
   electricite: Zap,
+  pvc: BoxSelect,
+  cornier: Frame,
+  peinture: PaintBucket,
+  outillage: Wrench,
 };
 
 const categoryColors: Record<CategoryType, string> = {
@@ -36,6 +40,10 @@ const categoryColors: Record<CategoryType, string> = {
   vis: "bg-[#5a626a] hover:bg-[#4a525a] text-white",
   platre: "bg-[#9bc7d8] hover:bg-[#8ab8c9] text-white",
   electricite: "bg-[#e26c6d] hover:bg-[#d25c5d] text-white",
+  pvc: "bg-[#5a626a] hover:bg-[#4a525a] text-white",
+  cornier: "bg-[#628b9a] hover:bg-[#527b8a] text-white",
+  peinture: "bg-[#9bc7d8] hover:bg-[#8ab8c9] text-white",
+  outillage: "bg-[#2f6b5f] hover:bg-[#22564c] text-white",
 };
 
 
@@ -45,7 +53,7 @@ const getCustomizableCategories = (): Set<CategoryType> => {
   const slug = getStoreSlug();
   if (slug === "placo") {
     // All placo categories are customizable
-    return new Set<CategoryType>(["placo", "vis", "platre", "electricite", "accessoires", "enduit"]);
+    return new Set<CategoryType>(["placo", "vis", "platre", "electricite", "accessoires", "enduit", "pvc", "cornier", "peinture", "outillage"]);
   }
   return new Set<CategoryType>(["satine", "vinyle", "enduit", "laque", "fixateur"]);
 };
