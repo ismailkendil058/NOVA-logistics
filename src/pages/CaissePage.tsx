@@ -285,7 +285,8 @@ export default function CaissePage() {
     return products.filter(p => {
       const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
       const matchCat = !search && activeCategory ? p.category === activeCategory : true;
-      return matchSearch && matchCat;
+      const matchStock = p.stock > 0;
+      return matchSearch && matchCat && matchStock;
     });
   }, [products, search, activeCategory]);
 
