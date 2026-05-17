@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Plus, RotateCcw, Search, Eye, ArrowLeft, Package, PackagePlus, X, Pencil, Wallet } from "lucide-react";
+import { Plus, RotateCcw, Search, Eye, ArrowLeft, Package, PackagePlus, X, Pencil, Wallet, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,7 +8,7 @@ import {
   getInvoices, getSuppliers, getProducts,
   Invoice, InvoiceItem, Supplier, Product,
   formatDZD, generateId, updateProductStock, upsertSupplier, upsertProduct,
-  createInvoice, updateInvoice, addInvoicePayment, getCategories, CategoryType
+  createInvoice, updateInvoice, addInvoicePayment, getCategories, CategoryType, deleteInvoice
 } from "@/lib/store";
 import { useIsMobile } from "@/hooks/useIsMobile";
 
@@ -110,6 +110,14 @@ export default function FacturesPage() {
 
   const removeInvoiceItem = (idx: number) => {
     setInvoiceItems(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const editInvoiceItem = (idx: number) => {
+    const item = invoiceItems[idx];
+    setDraftInvoiceItem(item);
+    setInvoiceItems(prev => prev.filter((_, i) => i !== idx));
+    // Focus on product name input if possible
+    window.scrollTo({ top: 300, behavior: 'smooth' });
   };
 
   const getInvoiceItemLabel = (item: InvoiceFormItem) => {
@@ -280,6 +288,14 @@ export default function FacturesPage() {
     setDraftInvoiceItem(createInvoiceFormItem());
     setInitialPaid("");
     setInvoiceDate(new Date().toISOString().split("T")[0]);
+  };
+
+  const handleDeleteInvoice = async (invoice: Invoice) => {
+    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer la facture ${invoice.number} ? Le stock sera automatiquement débité.`)) return;
+    await deleteInvoice(invoice.id);
+    const [freshInvoices, freshProducts] = await Promise.all([getInvoices(), getProducts()]);
+    setInvoices(freshInvoices);
+    setProducts(freshProducts);
   };
 
   const selectedReturnInvoice = invoices.find(i => i.id === returnInvoiceId);
@@ -466,9 +482,14 @@ export default function FacturesPage() {
                               <td className="px-4 py-3 text-gray-600">{formatDZD(item.priceSale)}</td>
                               <td className="px-4 py-3 font-bold text-[#41b86d]">{formatDZD(item.priceBuy * item.quantity)}</td>
                               <td className="px-4 py-3 text-right">
-                                <button onClick={() => removeInvoiceItem(idx)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-500">
-                                  <X className="h-4 w-4" />
-                                </button>
+                                <div className="flex items-center justify-end gap-1">
+                                  <button onClick={() => editInvoiceItem(idx)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-500">
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                  <button onClick={() => removeInvoiceItem(idx)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-50 text-red-500">
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))}
@@ -848,12 +869,22 @@ export default function FacturesPage() {
                         <td className="px-4 py-3 text-gray-600">{formatDZD(item.priceSale)}</td>
                         <td className="px-4 py-3 font-bold text-[#41b86d]">{formatDZD(item.priceBuy * item.quantity)}</td>
                         <td className="px-4 py-3 text-right">
-                          <button
-                            onClick={() => removeInvoiceItem(idx)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => editInvoiceItem(idx)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-blue-500 hover:bg-blue-50 transition-colors"
+                              title="Modifier"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => removeInvoiceItem(idx)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                              title="Supprimer"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1303,6 +1334,13 @@ export default function FacturesPage() {
                           <Pencil className="h-4 w-4" />
                         </Button>
                       )}
+                      <Button
+                        variant="outline"
+                        className="h-11 w-11 rounded-2xl border-red-100 text-red-500 hover:bg-red-50"
+                        onClick={() => handleDeleteInvoice(inv)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 </article>
@@ -1475,6 +1513,15 @@ export default function FacturesPage() {
                           <Pencil className="h-4 w-4" />
                         </Button>
                       )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        onClick={() => handleDeleteInvoice(inv)}
+                        title="Supprimer la facture"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </td>
                 </tr>

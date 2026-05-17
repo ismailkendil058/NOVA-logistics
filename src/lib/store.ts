@@ -749,6 +749,16 @@ export async function updateInvoice(invoice: Invoice, supplierId: string) {
   }
 }
 
+export async function deleteInvoice(id: string) {
+  const storeId = requireStoreId();
+  // Deleting the invoice will:
+  // 1. Revert stock changes (via purchase_invoice_items_sync_stock trigger on cascade delete)
+  // 2. Delete invoice items (via ON DELETE CASCADE)
+  // 3. Delete invoice payments (via ON DELETE CASCADE)
+  const { error } = await supabase.from('purchase_invoices').delete().eq('id', id).eq('store_id', storeId);
+  if (error) console.error("deleteInvoice error:", error);
+}
+
 export async function addInvoicePayment(invoiceId: string, amount: number) {
   const storeId = requireStoreId();
   await supabase.from('purchase_invoice_payments').insert({
