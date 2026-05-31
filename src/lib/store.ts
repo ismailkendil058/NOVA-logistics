@@ -831,10 +831,25 @@ export async function upsertProduct(product: { name: string; category: string; p
   }
 
   // Create new product
-  const { data: categories } = await supabase.from('store_categories')
+  let { data: categories } = await supabase.from('store_categories')
     .select('id, code').eq('store_id', storeId);
-  const categoryId = categories?.find(c => c.code === product.category)?.id;
-  if (!categoryId) throw new Error(`Category '${product.category}' not found`);
+  let categoryId = categories?.find(c => c.code === product.category)?.id;
+  
+  // Auto-create category if it doesn't exist
+  if (!categoryId) {
+    const { data: newCat, error: catError } = await supabase.from('store_categories').insert({
+      store_id: storeId,
+      code: product.category,
+      name: product.category,
+      sort_order: 0,
+    }).select('id').maybeSingle();
+    
+    if (catError || !newCat) {
+      console.error("Failed to create category:", catError);
+      throw new Error(`Failed to create category '${product.category}': ${catError?.message || 'Unknown error'}`);
+    }
+    categoryId = newCat.id;
+  }
 
   const { data: newProd, error } = await supabase.from('products').insert({
     store_id: storeId, name: product.name.trim(), category_id: categoryId,
