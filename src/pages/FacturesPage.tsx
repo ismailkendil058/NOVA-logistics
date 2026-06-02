@@ -37,6 +37,7 @@ export default function FacturesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     Promise.all([getInvoices(), getSuppliers(), getProducts()]).then(([inv, sup, prod]) => {
@@ -125,95 +126,113 @@ export default function FacturesPage() {
   };
 
   const handleSubmitInvoice = async () => {
-    // Get or create supplier
-    const supplier = await upsertSupplier(newSupplier);
-    const freshSuppliers = await getSuppliers();
-    setSuppliers(freshSuppliers);
+    if (isSubmitting) return;
+    const validItems = invoiceItems.filter(i => i.quantity > 0);
+    if (validItems.length === 0) return;
 
-    const items: InvoiceItem[] = [];
+    setIsSubmitting(true);
+    try {
+      // Get or create supplier
+      const supplier = await upsertSupplier(newSupplier);
+      const freshSuppliers = await getSuppliers();
+      setSuppliers(freshSuppliers);
 
-    for (const item of invoiceItems) {
-      const product = await upsertProduct({
-        name: item.newName,
-        category: item.newCategory,
-        priceBuy: item.priceBuy,
-        priceSale: item.priceSale,
-        quantity: item.quantity,
-        expiryDate: item.expiryDate || undefined,
-      });
-      items.push({ product, quantity: item.quantity, priceBuy: item.priceBuy, priceSale: item.priceSale, expiryDate: item.expiryDate });
+      const items: InvoiceItem[] = [];
+
+      for (const item of validItems) {
+        const product = await upsertProduct({
+          name: item.newName,
+          category: item.newCategory,
+          priceBuy: item.priceBuy,
+          priceSale: item.priceSale,
+          quantity: item.quantity,
+          expiryDate: item.expiryDate || undefined,
+        });
+        items.push({ product, quantity: item.quantity, priceBuy: item.priceBuy, priceSale: item.priceSale, expiryDate: item.expiryDate });
+      }
+
+      const total = items.reduce((s, i) => s + i.priceBuy * i.quantity, 0);
+      const paid = Number(initialPaid) || 0;
+
+      const invoice: Invoice = {
+        id: generateId(),
+        number: `FAC-${Date.now().toString().slice(-6)}`,
+        supplier,
+        items,
+        total,
+        paidAmount: paid,
+        payments: paid > 0 ? [{ id: generateId(), amount: paid, date: invoiceDate }] : [],
+        date: invoiceDate,
+        type: "achat",
+      };
+
+      await createInvoice(invoice, supplier.id);
+      const [freshInvoices, freshProducts] = await Promise.all([getInvoices(), getProducts()]);
+      setInvoices(freshInvoices);
+      setProducts(freshProducts);
+      resetAddForm();
+      setView("list");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const total = items.reduce((s, i) => s + i.priceBuy * i.quantity, 0);
-    const paid = Number(initialPaid) || 0;
-
-    const invoice: Invoice = {
-      id: generateId(),
-      number: `FAC-${Date.now().toString().slice(-6)}`,
-      supplier,
-      items,
-      total,
-      paidAmount: paid,
-      payments: paid > 0 ? [{ id: generateId(), amount: paid, date: invoiceDate }] : [],
-      date: invoiceDate,
-      type: "achat",
-    };
-
-    await createInvoice(invoice, supplier.id);
-    const [freshInvoices, freshProducts] = await Promise.all([getInvoices(), getProducts()]);
-    setInvoices(freshInvoices);
-    setProducts(freshProducts);
-    resetAddForm();
-    setView("list");
   };
 
   const handleUpdateInvoice = async () => {
-    if (!editingInvoiceId) return;
-    const oldInvoice = invoices.find(i => i.id === editingInvoiceId);
-    if (!oldInvoice) return;
+    if (!editingInvoiceId || isSubmitting) return;
+    const validItems = invoiceItems.filter(i => i.quantity > 0);
+    if (validItems.length === 0) return;
 
-    const supplier = await upsertSupplier(newSupplier);
-    const freshSuppliers = await getSuppliers();
-    setSuppliers(freshSuppliers);
+    setIsSubmitting(true);
+    try {
+      const oldInvoice = invoices.find(i => i.id === editingInvoiceId);
+      if (!oldInvoice) return;
 
-    // Stock revert/apply is now handled automatically by Supabase triggers 
-    // when we update the invoice items.
+      const supplier = await upsertSupplier(newSupplier);
+      const freshSuppliers = await getSuppliers();
+      setSuppliers(freshSuppliers);
 
-    const newItems: InvoiceItem[] = [];
-    for (const item of invoiceItems) {
-      const product = await upsertProduct({
-        name: item.newName,
-        category: item.newCategory,
-        priceBuy: item.priceBuy,
-        priceSale: item.priceSale,
-        quantity: item.quantity,
-        expiryDate: item.expiryDate || undefined,
-      });
-      newItems.push({ product, quantity: item.quantity, priceBuy: item.priceBuy, priceSale: item.priceSale, expiryDate: item.expiryDate });
+      const newItems: InvoiceItem[] = [];
+      for (const item of validItems) {
+        const product = await upsertProduct({
+          name: item.newName,
+          category: item.newCategory,
+          priceBuy: item.priceBuy,
+          priceSale: item.priceSale,
+          quantity: item.quantity,
+          expiryDate: item.expiryDate || undefined,
+        });
+        newItems.push({ product, quantity: item.quantity, priceBuy: item.priceBuy, priceSale: item.priceSale, expiryDate: item.expiryDate });
+      }
+
+      const total = newItems.reduce((s, i) => s + i.priceBuy * i.quantity, 0);
+      const paid = Number(initialPaid) || 0;
+
+      const updatedInvoice: Invoice = {
+        ...oldInvoice,
+        supplier,
+        items: newItems,
+        total,
+        paidAmount: paid,
+        payments: (oldInvoice.payments && oldInvoice.payments.length > 0)
+          ? [{ ...oldInvoice.payments[0], amount: paid, date: invoiceDate }, ...oldInvoice.payments.slice(1)]
+          : (paid > 0 ? [{ id: generateId(), amount: paid, date: invoiceDate }] : []),
+        date: invoiceDate,
+      };
+
+      await updateInvoice(updatedInvoice, supplier.id);
+      const [freshInvoices, freshProducts] = await Promise.all([getInvoices(), getProducts()]);
+      setInvoices(freshInvoices);
+      setProducts(freshProducts);
+      resetAddForm();
+      setEditingInvoiceId(null);
+      setView("list");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const total = newItems.reduce((s, i) => s + i.priceBuy * i.quantity, 0);
-    const paid = Number(initialPaid) || 0;
-
-    const updatedInvoice: Invoice = {
-      ...oldInvoice,
-      supplier,
-      items: newItems,
-      total,
-      paidAmount: paid,
-      payments: (oldInvoice.payments && oldInvoice.payments.length > 0)
-        ? [{ ...oldInvoice.payments[0], amount: paid, date: invoiceDate }, ...oldInvoice.payments.slice(1)]
-        : (paid > 0 ? [{ id: generateId(), amount: paid, date: invoiceDate }] : []),
-      date: invoiceDate,
-    };
-
-    await updateInvoice(updatedInvoice, supplier.id);
-    const [freshInvoices, freshProducts] = await Promise.all([getInvoices(), getProducts()]);
-    setInvoices(freshInvoices);
-    setProducts(freshProducts);
-    resetAddForm();
-    setEditingInvoiceId(null);
-    setView("list");
   };
 
   const startEditing = (invoice: Invoice) => {
@@ -604,10 +623,10 @@ export default function FacturesPage() {
                 <Button
                   type="button"
                   onClick={view === "edit" ? handleUpdateInvoice : handleSubmitInvoice}
-                  disabled={invoiceItems.length === 0}
-                  className="h-12 rounded-2xl bg-[#41b86d] px-5 font-bold text-white hover:bg-[#39a05f]"
+                  disabled={invoiceItems.length === 0 || isSubmitting}
+                  className="h-12 rounded-2xl bg-[#41b86d] px-5 font-bold text-white hover:bg-[#39a05f] disabled:opacity-50"
                 >
-                  {view === "edit" ? "Mettre à jour" : "Valider"}
+                  {isSubmitting ? "En cours..." : (view === "edit" ? "Mettre à jour" : "Valider")}
                 </Button>
               </div>
             </div>
@@ -638,10 +657,10 @@ export default function FacturesPage() {
             <Button
               type="button"
               onClick={view === "edit" ? handleUpdateInvoice : handleSubmitInvoice}
-              disabled={invoiceItems.length === 0}
+              disabled={invoiceItems.length === 0 || isSubmitting}
               className="bg-[#41b86d] hover:bg-[#39a05f] text-white shadow-sm font-bold h-11 px-6 rounded-xl disabled:opacity-40"
             >
-              {view === "edit" ? "Sauvegarder les modifications" : "Valider la Facture"}
+              {isSubmitting ? "Traitement..." : (view === "edit" ? "Sauvegarder les modifications" : "Valider la Facture")}
             </Button>
           </div>
         </div>

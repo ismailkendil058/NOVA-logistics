@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getProducts, getCategories, saveProducts, Product } from "@/lib/store";
+import { getProducts, getCategories, saveProducts, updateProduct, deleteProduct, Product } from "@/lib/store";
 
 import { useIsMobile } from "@/hooks/useIsMobile";
 
@@ -31,13 +31,31 @@ export default function InventairePage() {
   // Delete Confirmation State
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
+  const groupedProducts = useMemo(() => {
+    const map = new Map<string, Product>();
+    products.forEach(p => {
+      const key = `${p.name.trim().toLowerCase()}_${p.priceSale}`;
+      if (map.has(key)) {
+        const existing = map.get(key)!;
+        existing.stock += p.stock;
+        // Keep the one with an expiry date if available
+        if (!existing.expiryDate && p.expiryDate) {
+          existing.expiryDate = p.expiryDate;
+        }
+      } else {
+        map.set(key, { ...p });
+      }
+    });
+    return Array.from(map.values());
+  }, [products]);
+
   const filtered = useMemo(() => {
-    return products.filter(p => {
+    return groupedProducts.filter(p => {
       const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
       const matchCat = !catFilter || p.category === catFilter;
       return matchSearch && matchCat;
     });
-  }, [products, search, catFilter]);
+  }, [groupedProducts, search, catFilter]);
 
   const totals = useMemo(() => {
     return products.reduce((acc, p) => ({
@@ -47,16 +65,19 @@ export default function InventairePage() {
   }, [products]);
 
   const updateMinStock = async (id: string, value: number) => {
-    const updated = products.map(p => p.id === id ? { ...p, minStock: value } : p);
+    const product = products.find(p => p.id === id);
+    if (!product) return;
+    const updatedProduct = { ...product, minStock: value };
+    const updated = products.map(p => p.id === id ? updatedProduct : p);
     setProducts(updated);
-    await saveProducts(updated);
+    await updateProduct(updatedProduct);
   };
 
   const handleEditSave = async () => {
     if (!editingProduct) return;
     const updated = products.map(p => p.id === editingProduct.id ? editingProduct : p);
     setProducts(updated);
-    await saveProducts(updated);
+    await updateProduct(editingProduct);
     setEditingProduct(null);
   };
 
@@ -64,7 +85,7 @@ export default function InventairePage() {
     if (!productToDelete) return;
     const updated = products.filter(p => p.id !== productToDelete.id);
     setProducts(updated);
-    await saveProducts(updated);
+    await deleteProduct(productToDelete.id);
     setProductToDelete(null);
     setEditingProduct(null);
   };

@@ -175,24 +175,69 @@ export async function saveProducts(products: Product[]) {
   const { data: categories } = await supabase
     .from('store_categories').select('*').eq('store_id', storeId);
 
-  const mapped = products.map(p => ({
-    id: isValidUUID(p.id) ? p.id : undefined,
-    store_id: storeId,
-    name: p.name,
-    name_ar: p.nameAr,
-    price_sale: p.priceSale,
-    price_buy: p.priceBuy,
-    stock_quantity: p.stock,
-    min_stock_quantity: p.minStock || 5,
-    unit: p.unit === 'unité' ? 'unit' : 'kg',
-    expiry_date: p.expiryDate || null,
-    category_id: categories?.find(c => c.code === p.category)?.id,
-  })).filter(p => !!p.category_id);
+  const mapped = products.map(p => {
+    const categoryId = categories?.find(c => c.code === p.category)?.id;
+    return {
+      id: isValidUUID(p.id) ? p.id : undefined,
+      store_id: storeId,
+      name: p.name,
+      name_ar: p.nameAr,
+      price_sale: p.priceSale,
+      price_buy: p.priceBuy,
+      stock_quantity: p.stock,
+      min_stock_quantity: p.minStock ?? 5,
+      unit: p.unit === 'unité' ? 'unit' : 'kg',
+      expiry_date: p.expiryDate || null,
+      category_id: categoryId,
+    };
+  }).filter(p => !!p.category_id);
 
   if (mapped.length > 0) {
     const { error } = await supabase.from('products').upsert(mapped);
     if (error) console.error("saveProducts error:", error);
   }
+}
+
+export async function updateProduct(p: Product) {
+  const storeId = requireStoreId();
+  if (!isValidUUID(p.id)) return;
+
+  const { data: categories } = await supabase
+    .from('store_categories').select('*').eq('store_id', storeId);
+  const categoryId = categories?.find(c => c.code === p.category)?.id;
+
+  if (!categoryId) {
+    console.error(`Category ${p.category} not found for product ${p.name}`);
+    return;
+  }
+
+  const { error } = await supabase.from('products').update({
+    name: p.name,
+    name_ar: p.nameAr,
+    price_sale: p.priceSale,
+    price_buy: p.priceBuy,
+    stock_quantity: p.stock,
+    min_stock_quantity: p.minStock ?? 5,
+    unit: p.unit === 'unité' ? 'unit' : 'kg',
+    expiry_date: p.expiryDate || null,
+    category_id: categoryId,
+  }).eq('id', p.id).eq('store_id', storeId);
+
+  if (error) console.error("updateProduct error:", error);
+}
+
+export async function deleteProduct(id: string) {
+  const storeId = requireStoreId();
+  if (!isValidUUID(id)) return;
+
+  // Soft delete
+  const { error } = await supabase
+    .from('products')
+    .update({ is_active: false })
+    .eq('id', id)
+    .eq('store_id', storeId);
+
+  if (error) console.error("deleteProduct error:", error);
 }
 
 export async function updateProductStock(id: string, delta: number) {
@@ -579,16 +624,76 @@ export async function getCustomCards(): Promise<CustomSaleCard[]> {
 
 export async function saveCustomCards(cards: CustomSaleCard[]) {
   const storeId = requireStoreId();
-  // Update remaining quantities for existing cards
-  for (const card of cards) {
-    if (isValidUUID(card.id)) {
-      await supabase.from('custom_sale_cards').update({
-        remaining_quantity: card.kg,
-        unit_price: card.unitPrice,
-        price_buy_per_kg: card.priceBuyPerKg || 0,
-      }).eq('id', card.id).eq('store_id', storeId);
-    }
+
+  const mapped = cards.map(card => ({
+    id: isValidUUID(card.id) ? card.id : undefined,
+    store_id: storeId,
+    base_product_id: card.baseProductId,
+    initial_quantity: card.kg, // Simplified: setting initial = remaining for new ones
+    remaining_quantity: card.kg,
+    unit_price: card.unitPrice,
+    price_buy_per_kg: card.priceBuyPerKg || 0,
+    is_active: card.kg > 0,
+  }));
+
+  if (mapped.length > 0) {
+    const { error } = await supabase.from('custom_sale_cards').upsert(mapped);
+    if (error) console.error("saveCustomCards error:", error);
   }
+}
+
+export async function addCustomCard(card: Omit<CustomSaleCard, 'id'>): Promise<CustomSaleCard | null> {
+  const storeId = requireStoreId();
+  const { data, error } = await supabase.from('custom_sale_cards').insert({
+    store_id: storeId,
+    base_product_id: card.baseProductId,
+    initial_quantity: card.kg,
+    remaining_quantity: card.kg,
+    unit_price: card.unitPrice,
+    price_buy_per_kg: card.priceBuyPerKg || 0,
+    is_active: true,
+  }).select('*, base_product:products!custom_sale_cards_base_product_fkey(name, category:store_categories!products_store_category_fkey(code))').single();
+
+  if (error) { console.error("addCustomCard error:", error); return null; }
+  return {
+    id: data.id,
+    baseProductId: data.base_product_id,
+    baseProductName: data.base_product?.name || '',
+    category: (data.base_product?.category?.code || 'satine') as CategoryType,
+    kg: Number(data.remaining_quantity),
+    unitPrice: Number(data.unit_price),
+    priceBuyPerKg: Number(data.price_buy_per_kg) || 0,
+  };
+}
+
+export async function updateCustomCard(id: string, updates: Partial<CustomSaleCard>) {
+  const storeId = requireStoreId();
+  if (!isValidUUID(id)) return;
+
+  const pgUpdates: any = {};
+  if (updates.kg !== undefined) pgUpdates.remaining_quantity = updates.kg;
+  if (updates.unitPrice !== undefined) pgUpdates.unit_price = updates.unitPrice;
+  if (updates.priceBuyPerKg !== undefined) pgUpdates.price_buy_per_kg = updates.priceBuyPerKg;
+  if (updates.kg !== undefined && updates.kg <= 0) pgUpdates.is_active = false;
+
+  const { error } = await supabase.from('custom_sale_cards')
+    .update(pgUpdates)
+    .eq('id', id)
+    .eq('store_id', storeId);
+
+  if (error) console.error("updateCustomCard error:", error);
+}
+
+export async function deleteCustomCard(id: string) {
+  const storeId = requireStoreId();
+  if (!isValidUUID(id)) return;
+
+  const { error } = await supabase.from('custom_sale_cards')
+    .update({ is_active: false })
+    .eq('id', id)
+    .eq('store_id', storeId);
+
+  if (error) console.error("deleteCustomCard error:", error);
 }
 
 // ─── SUPPLIERS ───────────────────────────────────────────────────────
@@ -806,12 +911,14 @@ export async function upsertProduct(product: { name: string; category: string; p
   const storeId = requireStoreId();
 
   // Find existing product by name
-  const { data: existing } = await supabase.from('products')
+  const { data: searchData } = await supabase.from('products')
     .select('*, store_categories(code)')
     .eq('store_id', storeId)
     .ilike('name', product.name.trim())
     .eq('is_active', true)
-    .maybeSingle();
+    .limit(1);
+
+  const existing = searchData?.[0];
 
   if (existing) {
     // Update metadata and prices, but NOT stock (handled by triggers)
@@ -834,7 +941,7 @@ export async function upsertProduct(product: { name: string; category: string; p
   let { data: categories } = await supabase.from('store_categories')
     .select('id, code').eq('store_id', storeId);
   let categoryId = categories?.find(c => c.code === product.category)?.id;
-  
+
   // Auto-create category if it doesn't exist
   if (!categoryId) {
     const { data: newCat, error: catError } = await supabase.from('store_categories').insert({
@@ -843,7 +950,7 @@ export async function upsertProduct(product: { name: string; category: string; p
       name: product.category,
       sort_order: 0,
     }).select('id').maybeSingle();
-    
+
     if (catError || !newCat) {
       console.error("Failed to create category:", catError);
       throw new Error(`Failed to create category '${product.category}': ${catError?.message || 'Unknown error'}`);

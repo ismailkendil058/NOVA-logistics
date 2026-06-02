@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import {
   getProducts, CartItem, Product, CategoryType, getCategories, getStoreSlug,
   formatDZD, generateId, addSale, updateProductStock, TeinteEntry,
-  getCustomCards, saveCustomCards, CustomSaleCard, getCredits, Credit,
+  getCustomCards, saveCustomCards, addCustomCard, updateCustomCard, deleteCustomCard, CustomSaleCard, getCredits, Credit,
   addExpense
 } from "@/lib/store";
 
@@ -147,12 +147,7 @@ export default function CaissePage() {
     if (!retourSearch) return [];
     return products.filter(p => p.name.toLowerCase().includes(retourSearch.toLowerCase()));
   }, [products, retourSearch]);
-  const [customCardsLoaded, setCustomCardsLoaded] = useState(false);
-  useEffect(() => {
-    if (customCardsLoaded) {
-      saveCustomCards(customCards);
-    }
-  }, [customCards, customCardsLoaded]);
+  // Removed automatic save custom cards effect, we now call API explicitly
 
   useEffect(() => {
     const loadData = async () => {
@@ -165,7 +160,6 @@ export default function CaissePage() {
       setProducts(prods);
       setCustomCards(cards);
       setAllCredits(creds);
-      setCustomCardsLoaded(true);
       setLoading(false);
     };
     loadData();
@@ -242,14 +236,25 @@ export default function CaissePage() {
     setCustomCards(prev => [...prev, card]);
   };
 
-  const handleCustomSaleConfirm = () => {
+  const handleCustomSaleConfirm = async () => {
     if (!customModalProduct) return;
     const kg = Number(customModalKg);
     const unitPrice = Number(customModalUnitPrice);
     if (!kg || !unitPrice) return;
     const customPurchaseCostPerKg = getCustomPurchaseCostPerKg(customModalProduct, kg);
 
-    addCustomCardEntry(customModalProduct, kg, unitPrice, customPurchaseCostPerKg);
+    const newCard = await addCustomCard({
+      baseProductId: customModalProduct.id,
+      baseProductName: customModalProduct.name,
+      category: customModalProduct.category,
+      kg,
+      unitPrice,
+      priceBuyPerKg: customPurchaseCostPerKg,
+    });
+
+    if (newCard) {
+      setCustomCards(prev => [...prev, newCard]);
+    }
     closeCustomModal();
   };
 
@@ -281,14 +286,31 @@ export default function CaissePage() {
     setCustomCardKg("");
   };
 
+  const groupedProducts = useMemo(() => {
+    const map = new Map<string, Product>();
+    products.forEach(p => {
+      const key = `${p.name.trim().toLowerCase()}_${p.priceSale}`;
+      if (map.has(key)) {
+        const existing = map.get(key)!;
+        existing.stock += p.stock;
+        if (!existing.expiryDate && p.expiryDate) {
+          existing.expiryDate = p.expiryDate;
+        }
+      } else {
+        map.set(key, { ...p });
+      }
+    });
+    return Array.from(map.values());
+  }, [products]);
+
   const filteredProducts = useMemo(() => {
-    return products.filter(p => {
+    return groupedProducts.filter(p => {
       const matchSearch = !search || p.name.toLowerCase().includes(search.toLowerCase());
       const matchCat = !search && activeCategory ? p.category === activeCategory : true;
       const matchStock = p.stock > 0;
       return matchSearch && matchCat && matchStock;
     });
-  }, [products, search, activeCategory]);
+  }, [groupedProducts, search, activeCategory]);
 
   const normalProductCartQty = (productId: string) => {
     return cart.reduce((sum, item) => {
@@ -333,13 +355,23 @@ export default function CaissePage() {
   const teinteAmount = teinteEntries.reduce((s, entry) => s + entry.unitPrice * entry.kg, 0);
   const total = subtotal + teinteAmount - reduction;
 
-  const applyCustomCardUsage = () => {
+  const applyCustomCardUsage = async () => {
     const usage: Record<string, number> = {};
     cart.forEach(item => {
       if (!item.customCardId) return;
       usage[item.customCardId] = (usage[item.customCardId] || 0) + (item.weightKg ?? item.quantity);
     });
     if (!Object.keys(usage).length) return;
+
+    for (const cardId in usage) {
+      const used = usage[cardId];
+      const card = customCards.find(c => c.id === cardId);
+      if (card) {
+        const remaining = Math.max(0, card.kg - used);
+        await updateCustomCard(cardId, { kg: remaining });
+      }
+    }
+
     setCustomCards(prev => {
       return prev.reduce<CustomSaleCard[]>((acc, card) => {
         const used = usage[card.id] ?? 0;
@@ -355,7 +387,7 @@ export default function CaissePage() {
   const handleCheckout = async (type: 'direct' | 'bon' | 'credit') => {
     const saleId = generateId();
     // 2. Physical inventory update is now handled by DB trigger on sale_items insert
-    applyCustomCardUsage();
+    await applyCustomCardUsage();
 
     if (type === 'direct') {
       await addSale({ id: saleId, type: 'direct', items: [...cart], teinteAmount, teinteEntries, reduction, total, date: new Date().toISOString() });
