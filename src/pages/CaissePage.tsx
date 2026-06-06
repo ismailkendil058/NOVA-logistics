@@ -52,8 +52,24 @@ const categoryColors: Record<CategoryType, string> = {
 const getCustomizableCategories = (): Set<CategoryType> => {
   const slug = getStoreSlug();
   if (slug === "placo") {
-    // All placo categories are customizable
-    return new Set<CategoryType>(["placo", "vis", "platre", "electricite", "accessoires", "enduit", "pvc", "cornier", "peinture", "outillage"]);
+    // All placo categories are customizable — include every CategoryType
+    return new Set<CategoryType>([
+      "satine",
+      "enduit",
+      "vinyle",
+      "laque",
+      "decor",
+      "fixateur",
+      "accessoires",
+      "placo",
+      "vis",
+      "platre",
+      "electricite",
+      "pvc",
+      "cornier",
+      "peinture",
+      "outillage",
+    ]);
   }
   return new Set<CategoryType>(["satine", "vinyle", "enduit", "laque", "fixateur"]);
 };
@@ -240,7 +256,7 @@ export default function CaissePage() {
     if (!customModalProduct) return;
     const kg = Number(customModalKg);
     const unitPrice = Number(customModalUnitPrice);
-    if (!kg || !unitPrice) return;
+    if (!kg || !unitPrice || kg > customModalProduct.stock) return;
     const customPurchaseCostPerKg = getCustomPurchaseCostPerKg(customModalProduct, kg);
 
     const newCard = await addCustomCard({
@@ -254,6 +270,8 @@ export default function CaissePage() {
 
     if (newCard) {
       setCustomCards(prev => [...prev, newCard]);
+      await updateProductStock(customModalProduct.id, -kg);
+      setProducts(prev => prev.map(p => p.id === customModalProduct.id ? { ...p, stock: Math.max(0, p.stock - kg) } : p));
     }
     closeCustomModal();
   };
