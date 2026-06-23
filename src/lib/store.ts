@@ -652,14 +652,14 @@ export async function addCustomCard(card: Omit<CustomSaleCard, 'id'>): Promise<C
     unit_price: card.unitPrice,
     price_buy_per_kg: card.priceBuyPerKg || 0,
     is_active: true,
-  }).select('*, base_product:products!custom_sale_cards_base_product_fkey(name, category:store_categories!products_store_category_fkey(code))').single();
+  }).select('id, base_product_id, remaining_quantity, unit_price, price_buy_per_kg').single();
 
   if (error) { console.error("addCustomCard error:", error); return null; }
   return {
     id: data.id,
     baseProductId: data.base_product_id,
-    baseProductName: data.base_product?.name || '',
-    category: (data.base_product?.category?.code || 'satine') as CategoryType,
+    baseProductName: card.baseProductName,
+    category: card.category,
     kg: Number(data.remaining_quantity),
     unitPrice: Number(data.unit_price),
     priceBuyPerKg: Number(data.price_buy_per_kg) || 0,
@@ -861,7 +861,10 @@ export async function deleteInvoice(id: string) {
   // 2. Delete invoice items (via ON DELETE CASCADE)
   // 3. Delete invoice payments (via ON DELETE CASCADE)
   const { error } = await supabase.from('purchase_invoices').delete().eq('id', id).eq('store_id', storeId);
-  if (error) console.error("deleteInvoice error:", error);
+  if (error) {
+    console.error("deleteInvoice error:", error);
+    throw new Error("Impossible de supprimer la facture : " + (error.message || "Erreur inconnue"));
+  }
 }
 
 export async function addInvoicePayment(invoiceId: string, amount: number) {

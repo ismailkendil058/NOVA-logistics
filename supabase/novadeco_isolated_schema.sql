@@ -450,17 +450,10 @@ begin
   end if;
 
   update public.products
-     set stock_quantity = stock_quantity + p_delta,
+     set stock_quantity = greatest(0, stock_quantity + p_delta),
          updated_at = now()
    where store_id = p_store_id
-     and id = p_product_id
-     and stock_quantity + p_delta >= 0;
-
-  if not found then
-    raise exception 'Stock update failed for product % in store % (delta %).',
-      p_product_id, p_store_id, p_delta
-      using errcode = '23514';
-  end if;
+     and id = p_product_id;
 end;
 $$;
 

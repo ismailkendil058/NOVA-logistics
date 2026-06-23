@@ -52,24 +52,9 @@ const categoryColors: Record<CategoryType, string> = {
 const getCustomizableCategories = (): Set<CategoryType> => {
   const slug = getStoreSlug();
   if (slug === "placo") {
-    // All placo categories are customizable — include every CategoryType
-    return new Set<CategoryType>([
-      "satine",
-      "enduit",
-      "vinyle",
-      "laque",
-      "decor",
-      "fixateur",
-      "accessoires",
-      "placo",
-      "vis",
-      "platre",
-      "electricite",
-      "pvc",
-      "cornier",
-      "peinture",
-      "outillage",
-    ]);
+    // All placo categories are customizable — dynamically include every category from the store
+    const allCats = getCategories();
+    return new Set<CategoryType>(allCats.map(c => c.key));
   }
   return new Set<CategoryType>(["satine", "vinyle", "enduit", "laque", "fixateur"]);
 };
@@ -253,27 +238,34 @@ export default function CaissePage() {
   };
 
   const handleCustomSaleConfirm = async () => {
-    if (!customModalProduct) return;
-    const kg = Number(customModalKg);
-    const unitPrice = Number(customModalUnitPrice);
-    if (!kg || !unitPrice || kg > customModalProduct.stock) return;
-    const customPurchaseCostPerKg = getCustomPurchaseCostPerKg(customModalProduct, kg);
+    try {
+      if (!customModalProduct) return;
+      const qty = Number(customModalKg);
+      const unitPrice = Number(customModalUnitPrice);
+      if (!qty || !unitPrice) return;
+      if (customModalProduct.stock < 1) return;
+      // Cost per unit = original bag price / how many units we split into
+      const costPerUnit = getCustomPurchaseCostPerKg(customModalProduct, qty);
 
-    const newCard = await addCustomCard({
-      baseProductId: customModalProduct.id,
-      baseProductName: customModalProduct.name,
-      category: customModalProduct.category,
-      kg,
-      unitPrice,
-      priceBuyPerKg: customPurchaseCostPerKg,
-    });
+      const newCard = await addCustomCard({
+        baseProductId: customModalProduct.id,
+        baseProductName: customModalProduct.name,
+        category: customModalProduct.category,
+        kg: qty,
+        unitPrice,
+        priceBuyPerKg: costPerUnit,
+      });
 
-    if (newCard) {
-      setCustomCards(prev => [...prev, newCard]);
-      await updateProductStock(customModalProduct.id, -kg);
-      setProducts(prev => prev.map(p => p.id === customModalProduct.id ? { ...p, stock: Math.max(0, p.stock - kg) } : p));
+      if (newCard) {
+        setCustomCards(prev => [...prev, newCard]);
+        // Remove only 1 from stock — we opened one "bag" of the product
+        await updateProductStock(customModalProduct.id, -1);
+        setProducts(prev => prev.map(p => p.id === customModalProduct.id ? { ...p, stock: Math.max(0, p.stock - 1) } : p));
+      }
+      closeCustomModal();
+    } catch (err) {
+      console.error("[CustomSale] Error:", err);
     }
-    closeCustomModal();
   };
 
   const canUseCustomCard = (card: CustomSaleCard) => {
@@ -296,6 +288,11 @@ export default function CaissePage() {
       const remaining = Math.max(0, prev.kg - kg);
       return remaining > 0 ? { ...prev, kg: remaining } : null;
     });
+  };
+
+  const handleDeleteCustomCard = async (card: CustomSaleCard) => {
+    await deleteCustomCard(card.id);
+    setCustomCards(prev => prev.filter(c => c.id !== card.id));
   };
 
   const openCustomCardModal = (card: CustomSaleCard) => {
@@ -597,7 +594,7 @@ export default function CaissePage() {
                 {visibleCustomCards.map(card => (
                   <div
                     key={card.id}
-                    className="relative border border-gray-100 rounded-2xl bg-white p-3 shadow-sm cursor-pointer"
+                    className="border border-gray-100 rounded-2xl bg-white p-3 shadow-sm cursor-pointer flex flex-col"
                     onClick={() => openCustomCardModal(card)}
                   >
                     <div className="flex items-center justify-between">
@@ -607,6 +604,14 @@ export default function CaissePage() {
                     <p className="mt-2 text-sm font-bold text-gray-800 line-clamp-2">{card.baseProductName}</p>
                     <p className="text-xs text-gray-500 mt-1">Prix unitaire</p>
                     <p className="text-lg font-black text-[#41b86d]">{formatDZD(card.unitPrice)} / kg</p>
+                    <button
+                      type="button"
+                      onClick={e => { e.stopPropagation(); handleDeleteCustomCard(card); }}
+                      className="mt-2 w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg py-1.5 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      Supprimer
+                    </button>
                   </div>
                 ))}
               </div>
@@ -1003,19 +1008,30 @@ export default function CaissePage() {
             <DialogTitle className="font-bold">Vente personnalisée</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <p className="text-sm font-semibold text-gray-700">{customModalProduct?.name}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-gray-700">{customModalProduct?.name}</p>
+              {customModalProduct && (
+                <span className="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                  Stock: {customModalProduct.stock} {customModalProduct.unit === "kg" ? "kg" : "u"}
+                </span>
+              )}
+            </div>
             <div className="space-y-1">
-              <p className="text-[11px] uppercase tracking-widest text-gray-500">Quantité (kg)</p>
+              <p className="text-[11px] uppercase tracking-widest text-gray-500">
+                Quantité ({customModalProduct?.unit === "kg" ? "kg" : "unités"})
+              </p>
               <Input
                 type="number"
-                placeholder="Ex. 25"
+                placeholder="Ex. 10, 25, 50..."
                 className="h-11 border-gray-200"
                 value={customModalKg}
                 onChange={e => setCustomModalKg(e.target.value)}
               />
             </div>
             <div className="space-y-1">
-              <p className="text-[11px] uppercase tracking-widest text-gray-500">Prix unitaire (DZD/kg)</p>
+              <p className="text-[11px] uppercase tracking-widest text-gray-500">
+                Prix unitaire (DZD/{customModalProduct?.unit === "kg" ? "kg" : "unité"})
+              </p>
               <Input
                 type="number"
                 placeholder="Ex. 1200"
@@ -1030,13 +1046,14 @@ export default function CaissePage() {
               </div>
             )}
           </div>
-          <Button
-            disabled={!customModalProduct || !(Number(customModalKg) > 0) || !(Number(customModalUnitPrice) > 0)}
+          <button
+            type="button"
+            disabled={!customModalProduct || !(Number(customModalKg) > 0) || !(Number(customModalUnitPrice) > 0) || (customModalProduct && customModalProduct.stock < 1)}
             onClick={handleCustomSaleConfirm}
-            className="w-full h-11 mt-2 bg-[#41b86d] hover:bg-[#378f63] text-white font-bold"
+            className="w-full h-11 mt-2 bg-[#41b86d] hover:bg-[#378f63] text-white font-bold rounded-md disabled:opacity-50 disabled:pointer-events-none"
           >
             Ajouter
-          </Button>
+          </button>
         </DialogContent>
       </Dialog>
 
